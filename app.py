@@ -1,271 +1,148 @@
 import streamlit as st
 import pandas as pd
-import re
-import warnings
-from typing import Dict, List
+import io
+import sys
+from typing import List, Dict
 
-warnings.filterwarnings('ignore')
-
-# ====================== ИМПОРТ МОДУЛЕЙ ======================
-import hr_core
+# ====================== ИМПОРТ ТВОИХ МОДУЛЕЙ ======================
+import hr_core                     # ← твой основной скрипт
 from x_russian_cities import is_valid_russian_city, normalize_city
 from x_it_keywords import is_it_candidate
 
 st.set_page_config(page_title="AI HR Скринер", layout="wide")
-st.title("🚀 AI HR Скринер — Подбор Python Backend разработчиков")
-st.markdown("Умный подбор кандидатов с фильтрами и нейросетями")
+st.title("🚀 AI HR Скринер")
+st.markdown("**Умный подбор Middle Backend Python-разработчиков**")
 
-# ====================== ФУНКЦИЯ ДЛЯ ИЗВЛЕЧЕНИЯ ЧИСЛА ИЗ СТРОКИ ======================
-def extract_number_from_string(text: str) -> int:
-    """Извлекает первое число из строки"""
-    if not text:
-        return None
-    numbers = re.findall(r'(\d+)', str(text))
-    if numbers:
-        return int(numbers[0])
-    return None
-
-# ====================== Сайдбар с фильтрами ======================
+# ====================== Сайдбар — все фильтры ======================
 with st.sidebar:
-    st.header("⚙️ Настройки фильтров")
+    st.header("⚙️ Настройки")
     
-    st.subheader("📋 Требования к кандидатам")
+    use_auto = st.checkbox("Авто-фильтры из вакансии", value=True)
+    use_manual = st.checkbox("Ручные фильтры", value=True)
     
-    min_age = st.number_input("Минимальный возраст", 18, 60, 23, key="min_age_input")
-    max_age = st.number_input("Максимальный возраст", 18, 70, 45, key="max_age_input")
-    min_exp = st.number_input("Минимальный опыт (лет)", 0, 15, 4, key="min_exp_input")
+    st.subheader("Требования к кандидату")
+    min_age = st.slider("Возраст от", 18, 60, 23)
+    max_age = st.slider("Возраст до", 18, 70, 45)
+    min_exp = st.slider("Опыт от (лет)", 0, 15, 5)
     
-    city_filter = st.text_input("Город (оставь пустым = любой)", "", key="city_input")
+    city_input = st.text_input("Город (пусто = любой)", value="")
     
-    position_keywords = st.multiselect(
-        "Ключевые слова в должности",
-        ["Backend", "Python", "Developer", "Middle", "Senior", "Fullstack", "Engineer", "Team Lead"],
-        default=["Backend", "Python", "Developer"],
-        key="position_input"
+    pos_kw = st.multiselect(
+        "Должность содержит",
+        ["Backend", "Python", "Developer", "Middle", "Senior"],
+        default=["Backend", "Python", "Developer"]
+    )
+    skill_kw = st.multiselect(
+        "Навыки содержат",
+        ["Python", "FastAPI", "PostgreSQL", "Docker", "Kubernetes", "Redis", "SQL"],
+        default=["Python", "FastAPI", "PostgreSQL", "Docker"]
     )
     
-    skills_keywords = st.multiselect(
-        "Ключевые навыки",
-        ["Python", "FastAPI", "Django", "Flask", "PostgreSQL", "Docker", "Kubernetes", "Redis", "SQL", "MongoDB", "Git", "Celery"],
-        default=["Python", "FastAPI", "PostgreSQL", "Docker"],
-        key="skills_input"
-    )
-    
-    st.divider()
-    
-    it_threshold = st.slider("IT Threshold (чувствительность)", 0.0, 10.0, 2.0, 0.5, 
-                             help="Чем выше значение, тем строже проверка на IT-специальность")
-    use_reranking = st.checkbox("Включить reranking (более точный)", value=True)
-    min_score = st.slider("Минимальный semantic score (%)", 10, 40, 15,
-                          help="Минимальный процент совместимости с требованиями")
-    top_k = st.slider("Сколько кандидатов показывать", 5, 50, 20)
+    it_threshold = st.slider("IT-порог", 0.0, 10.0, 2.0, 0.5)
+    use_rerank = st.checkbox("Включить reranking", value=True)
+    min_score = st.slider("Мин. semantic score", 10.0, 50.0, 15.0)
+    top_k = st.slider("Топ кандидатов", 5, 50, 20)
 
-# ====================== ОСНОВНАЯ ЧАСТЬ ======================
+# ====================== Основная область ======================
+vacancy_text = st.text_area(
+    "Текст вакансии",
+    height=280,
+    value="""Ищем Middle Backend Developer (Python) в развивающийся стартап.
 
-# Загрузка файла с резюме
-uploaded_file = st.file_uploader("📁 Загрузи файл с резюме (resumes_generated.txt)", type=["txt"])
+Требования:
+- Опыт коммерческой разработки на Python от 4 лет
+- Уверенное владение FastAPI или Django
+- Опыт работы с PostgreSQL и SQL
+- Знание Docker и основ Kubernetes
+- Опыт работы с Redis и очередями
+- Возраст от 23 до 45 лет
+- Город: любой (готовы рассматривать релокацию)"""
+)
 
-# Кнопка запуска
-search_btn = st.button("🚀 Запустить подбор кандидатов", type="primary", use_container_width=True)
+uploaded = st.file_uploader("Файл с резюме (resumes_generated.txt)", type="txt")
 
-# Обработка поиска
-if search_btn:
-    if uploaded_file is None:
-        st.error("❌ Сначала загрузи файл с резюме!")
-        st.stop()
-    
+if st.button("🔥 Запустить подбор", type="primary", use_container_width=True):
     # Сохраняем загруженный файл
-    with open("resumes_generated.txt", "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    st.success("✅ Файл с резюме загружен!")
-    
-    # Формируем фильтры
-    final_filters = {
+    if uploaded:
+        with open("resumes_generated.txt", "wb") as f:
+            f.write(uploaded.getbuffer())
+        resume_file = "resumes_generated.txt"
+        st.success("Резюме загружено")
+    else:
+        resume_file = "resumes_generated.txt"
+
+    # Подготовка ручных фильтров
+    manual_filters = {
         'min_age': min_age,
         'max_age': max_age,
         'min_experience': min_exp,
-        'city': city_filter.strip() if city_filter.strip() else None,
-        'position_keywords': position_keywords if position_keywords else [],
-        'skills_keywords': skills_keywords if skills_keywords else []
+        'city': city_input.strip() if city_input.strip() else None,
+        'position_keywords': pos_kw,
+        'skills_keywords': skill_kw
     }
-    
-    # Убираем пустые значения
-    final_filters = {k: v for k, v in final_filters.items() if v}
-    
-    # Показываем примененные фильтры
-    st.subheader("🔍 Примененные фильтры:")
-    if final_filters:
-        st.json(final_filters)
-    else:
-        st.info("Фильтры не применены")
-    
-    # Запуск анализа
-    with st.spinner("📊 Анализируем кандидатов... (20-60 секунд)"):
-        resumes = hr_core.load_resumes_from_file("resumes_generated.txt")
-        original_count = len(resumes)
-        
-        # Диагностика загруженных резюме
-        st.write("---")
-        st.subheader("📋 Загруженные резюме:")
-        for i, r in enumerate(resumes[:5]):
-            age_val = extract_number_from_string(r.get('age'))
-            exp_val = extract_number_from_string(r.get('experience'))
-            st.text(f"{i+1}. {r.get('name')} | Возраст: {r.get('age')} → {age_val} | Опыт: {r.get('experience')} → {exp_val} | Город: {r.get('city')}")
-        
-        # Фильтруем кандидатов
-        filtered_candidates = []
-        rejected_candidates = []
-        
-        for resume in resumes:
-            # Извлекаем возраст и опыт как числа
-            age = extract_number_from_string(resume.get('age'))
-            experience = extract_number_from_string(resume.get('experience'))
-            
-            # Проверяем фильтры
-            passed = True
-            reason = None
-            
-            # Проверка имени
-            name = resume.get('name', '')
-            if not name or len(name) < 3:
-                passed = False
-                reason = "Некорректное имя"
-            
-            # Проверка города
-            elif city_filter and city_filter.strip():
-                city_norm = normalize_city(resume.get('city', ''))
-                if city_filter.lower() not in city_norm.lower():
-                    passed = False
-                    reason = f"Город '{resume.get('city')}' ≠ '{city_filter}'"
-            
-            # Проверка возраста
-            elif min_age and age and age < min_age:
-                passed = False
-                reason = f"Возраст {age} < {min_age}"
-            elif max_age and age and age > max_age:
-                passed = False
-                reason = f"Возраст {age} > {max_age}"
-            
-            # Проверка опыта
-            elif min_exp and experience and experience < min_exp:
-                passed = False
-                reason = f"Опыт {experience} < {min_exp}"
-            
-            # Проверка должности
-            elif position_keywords and len(position_keywords) > 0:
-                pos_text = resume.get('desired_position', '').lower()
-                if not any(kw.lower() in pos_text for kw in position_keywords):
-                    passed = False
-                    reason = f"Должность не содержит ключевых слов: {position_keywords}"
-            
-            # Проверка навыков
-            elif skills_keywords and len(skills_keywords) > 0:
-                skills_text = resume.get('skills', '').lower()
-                if not any(kw.lower() in skills_text for kw in skills_keywords):
-                    passed = False
-                    reason = f"Навыки не содержат ключевых слов: {skills_keywords}"
-            
-            # IT проверка
-            else:
-                is_it, it_reason = is_it_candidate(resume, threshold=it_threshold)
-                if not is_it:
-                    passed = False
-                    reason = f"Не IT-специальность: {it_reason}"
-            
-            if passed:
-                # Добавляем parsed поля для hr_core
-                resume['parsed_age'] = age
-                resume['parsed_experience'] = experience
-                filtered_candidates.append(resume)
-            else:
-                rejected_candidates.append({
-                    'name': resume.get('name', '?')[:35],
-                    'age': age if age else '?',
-                    'experience': experience if experience else '?',
-                    'city': resume.get('city', '?'),
-                    'reason': reason
-                })
-        
-        # Запускаем ранжирование только для прошедших фильтр
-        if filtered_candidates:
-            # Используем фиктивный текст вакансии для семантического поиска
-            vacancy_text_for_search = "Python Backend Developer with experience in FastAPI, Django, PostgreSQL, Docker"
-            
-            top_candidates = hr_core.rank_candidates(
-                vacancy_text=vacancy_text_for_search,
-                resumes=filtered_candidates,
-                manual_filters=None,
-                use_filters=False,
-                use_reranking=use_reranking,
-                min_score=min_score,
-                top_k=top_k,
-                it_threshold=it_threshold
-            )
-        else:
-            top_candidates = []
-    
-    # ====================== ВЫВОД РЕЗУЛЬТАТОВ ======================
-    st.success(f"✅ Готово! Найдено {len(top_candidates)} кандидатов из {original_count}")
-    
-    # Метрики
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("📄 Всего резюме", original_count)
-    with col2:
-        st.metric("✅ Прошло фильтры", len(filtered_candidates))
-    with col3:
-        st.metric("❌ Отсеяно", len(rejected_candidates))
-    with col4:
-        if original_count > 0:
-            st.metric("📊 Процент отбора", f"{len(filtered_candidates)/original_count*100:.1f}%")
-    
-    # Отсеянные кандидаты
-    with st.expander("📊 Отсеянные кандидаты", expanded=True):
-        if rejected_candidates:
-            df_rejected = pd.DataFrame(rejected_candidates)
-            st.dataframe(df_rejected, use_container_width=True, hide_index=True)
-        else:
-            st.info("✅ Нет отсеянных кандидатов")
-    
-    # Топ кандидатов
-    if top_candidates:
-        st.subheader("🏆 ТОП кандидатов")
-        df = pd.DataFrame(top_candidates)
-        cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'salary']
-        cols = [c for c in cols if c in df.columns]
-        st.dataframe(df[cols], use_container_width=True, hide_index=True)
-        
-        # Детальная информация
-        with st.expander("📋 Детальная информация о кандидатах"):
-            for i, cand in enumerate(top_candidates, 1):
-                st.markdown(f"**{i}. {cand.get('name', 'Неизвестно')}**")
-                st.text(f"   📅 Возраст: {cand.get('parsed_age', cand.get('age', '?'))} лет")
-                st.text(f"   💼 Опыт: {cand.get('parsed_experience', cand.get('experience', '?'))} лет")
-                st.text(f"   📍 Город: {cand.get('city', '?')}")
-                st.text(f"   💰 Зарплата: {cand.get('salary', '?')}")
-                st.text(f"   🎯 Совместимость: {cand.get('score', 0)}%")
-                if cand.get('rerank_score_percent'):
-                    st.text(f"   🎯 Точность (rerank): {cand.get('rerank_score_percent')}%")
-                st.markdown("---")
-    else:
-        st.warning("⚠️ Не найдено кандидатов, соответствующих критериям")
-        
-        with st.expander("💡 Как улучшить результаты?"):
-            st.markdown(f"""
-            **Текущие фильтры:**
-            - Минимальный опыт: {min_exp} лет
-            - Возраст: {min_age}-{max_age} лет
-            - Город: {city_filter if city_filter else 'любой'}
-            - Ключевые слова должности: {', '.join(position_keywords) if position_keywords else 'любые'}
-            - Ключевые навыки: {', '.join(skills_keywords) if skills_keywords else 'любые'}
-            
-            **Попробуйте:**
-            - Снизить минимальный опыт
-            - Расширить возрастные рамки
-            - Убрать фильтр по городу
-            - Добавить больше ключевых слов
-            - Снизить порог IT Threshold
-            - Уменьшить минимальный semantic score
-            """)
 
-st.caption("Сделано на Streamlit + SentenceTransformer • AI HR Скринер 2026")
+    # Устанавливаем настройки в hr_core
+    hr_core.USE_AUTO_FILTERS = use_auto
+    hr_core.USE_MANUAL_FILTERS = use_manual
+    hr_core.USE_MIN_AGE = True
+    hr_core.USE_MAX_AGE = True
+    hr_core.USE_MIN_EXPERIENCE = True
+    hr_core.USE_CITY = bool(city_input.strip())
+    hr_core.USE_POSITION_KEYWORDS = bool(pos_kw)
+    hr_core.USE_SKILLS_KEYWORDS = bool(skill_kw)
+    hr_core.USE_FILTERS = True
+    hr_core.USE_RERANKING = use_rerank
+    hr_core.MIN_SCORE = min_score
+    hr_core.TOP_K = top_k
+    hr_core.IT_THRESHOLD = it_threshold
+
+    # Загрузка резюме
+    with st.spinner("Загружаем резюме..."):
+        resumes = hr_core.load_resumes_from_file(resume_file)
+
+    # Захватываем весь консольный вывод
+    old_stdout = sys.stdout
+    sys.stdout = captured = io.StringIO()
+
+    with st.spinner("ИИ анализирует кандидатов (10–40 сек)..."):
+        top_candidates = hr_core.rank_candidates(
+            vacancy_text=vacancy_text,
+            resumes=resumes,
+            manual_filters=manual_filters,
+            use_filters=True,
+            use_reranking=use_rerank,
+            min_score=min_score,
+            top_k=top_k,
+            it_threshold=it_threshold
+        )
+
+    sys.stdout = old_stdout
+    console_log = captured.getvalue()
+
+    # ====================== Результаты ======================
+    st.success(f"✅ Найдено {len(top_candidates)} лучших кандидатов")
+
+    if top_candidates:
+        df = pd.DataFrame(top_candidates)
+        display_cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'rerank_score_percent', 'salary']
+        display_cols = [c for c in display_cols if c in df.columns]
+        
+        st.subheader("🏆 ТОП кандидатов")
+        st.dataframe(
+            df[display_cols].rename(columns={
+                'name': 'Имя',
+                'parsed_age': 'Возраст',
+                'parsed_experience': 'Опыт',
+                'score': 'Score %',
+                'rerank_score_percent': 'Rerank %'
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+
+    with st.expander("📋 Полный лог + статистика отсева"):
+        st.text(console_log)
+
+    st.balloons()
+
+st.caption("Streamlit + SentenceTransformer + твой AI-скринер • 2026")
