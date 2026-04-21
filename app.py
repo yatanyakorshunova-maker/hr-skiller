@@ -34,41 +34,19 @@ if 'auto_filters' not in st.session_state:
 if 'filters_applied' not in st.session_state:
     st.session_state.filters_applied = False
 
-# ====================== Сайдбар с фильтрами ======================
-with st.sidebar:
-    st.header("⚙️ Настройки фильтров")
-    
-    use_auto = st.checkbox("🤖 Использовать авто-фильтры из вакансии", value=True, 
-                           help="Автоматически извлекает возраст, опыт, город, ключевые слова из текста вакансии")
-    use_manual = st.checkbox("✋ Использовать ручные фильтры", value=True)
-    
-    st.divider()
-    
-    st.subheader("📋 Ручные требования")
-    min_age = st.number_input("Минимальный возраст", 18, 60, 23)
-    max_age = st.number_input("Максимальный возраст", 20, 70, 45)
-    min_exp = st.number_input("Минимальный опыт (лет)", 0, 15, 4)
-    
-    city_filter = st.text_input("Город (оставь пустым = любой)", "")
-    
-    position_keywords = st.multiselect(
-        "Ключевые слова в должности",
-        ["Backend", "Python", "Developer", "Middle", "Senior", "Fullstack", "Engineer"],
-        default=["Backend", "Python", "Developer"]
-    )
-    
-    skills_keywords = st.multiselect(
-        "Ключевые навыки",
-        ["Python", "FastAPI", "Django", "Flask", "PostgreSQL", "Docker", "Kubernetes", "Redis", "SQL", "MongoDB"],
-        default=["Python", "FastAPI", "PostgreSQL", "Docker"]
-    )
-    
-    st.divider()
-    
-    it_threshold = st.slider("IT Threshold (чувствительность)", 0.0, 10.0, 2.0, 0.5)
-    use_reranking = st.checkbox("Включить reranking (более точный)", value=True)
-    min_score = st.slider("Минимальный semantic score (%)", 10, 40, 15)
-    top_k = st.slider("Сколько кандидатов показывать", 5, 50, 20)
+# Инициализация значений фильтров в session_state
+if 'min_age_val' not in st.session_state:
+    st.session_state.min_age_val = 23
+if 'max_age_val' not in st.session_state:
+    st.session_state.max_age_val = 45
+if 'min_exp_val' not in st.session_state:
+    st.session_state.min_exp_val = 4
+if 'city_filter_val' not in st.session_state:
+    st.session_state.city_filter_val = ""
+if 'position_keywords_val' not in st.session_state:
+    st.session_state.position_keywords_val = ["Backend", "Python", "Developer"]
+if 'skills_keywords_val' not in st.session_state:
+    st.session_state.skills_keywords_val = ["Python", "FastAPI", "PostgreSQL", "Docker"]
 
 # ====================== ФУНКЦИЯ ИЗВЛЕЧЕНИЯ ФИЛЬТРОВ ИЗ ВАКАНСИИ ======================
 def extract_filters_from_text(text: str) -> Dict:
@@ -135,19 +113,108 @@ def extract_filters_from_text(text: str) -> Dict:
     position_list = ['backend', 'python', 'developer', 'middle', 'senior', 'fullstack', 'frontend', 'devops', 'data scientist', 'ml engineer']
     for pos in position_list:
         if pos in text_lower:
-            filters['position_keywords'].append(pos.title())
+            # Преобразуем в формат как в мультиселекте
+            if pos == 'backend':
+                filters['position_keywords'].append('Backend')
+            elif pos == 'python':
+                filters['position_keywords'].append('Python')
+            elif pos == 'developer':
+                filters['position_keywords'].append('Developer')
+            elif pos == 'middle':
+                filters['position_keywords'].append('Middle')
+            elif pos == 'senior':
+                filters['position_keywords'].append('Senior')
+            elif pos == 'fullstack':
+                filters['position_keywords'].append('Fullstack')
+            elif pos == 'frontend':
+                filters['position_keywords'].append('Frontend')
+            else:
+                filters['position_keywords'].append(pos.title())
     
     # Извлечение навыков
-    skill_list = ['python', 'fastapi', 'django', 'flask', 'sql', 'postgresql', 'docker', 'kubernetes', 'redis', 'mongodb', 'git', 'pytest']
-    for skill in skill_list:
-        if skill in text_lower:
-            filters['skills_keywords'].append(skill.title())
+    skill_list = {
+        'python': 'Python', 'fastapi': 'FastAPI', 'django': 'Django', 'flask': 'Flask',
+        'sql': 'SQL', 'postgresql': 'PostgreSQL', 'docker': 'Docker', 'kubernetes': 'Kubernetes',
+        'redis': 'Redis', 'mongodb': 'MongoDB', 'git': 'Git', 'pytest': 'Pytest'
+    }
+    
+    for skill_lower, skill_title in skill_list.items():
+        if skill_lower in text_lower:
+            filters['skills_keywords'].append(skill_title)
     
     # Убираем дубликаты
     filters['position_keywords'] = list(dict.fromkeys(filters['position_keywords']))
     filters['skills_keywords'] = list(dict.fromkeys(filters['skills_keywords']))
     
     return filters
+
+def update_filters_in_sidebar(filters: Dict):
+    """Обновляет значения фильтров в session_state"""
+    if filters.get('min_age'):
+        st.session_state.min_age_val = filters['min_age']
+    if filters.get('max_age'):
+        st.session_state.max_age_val = filters['max_age']
+    if filters.get('min_experience'):
+        st.session_state.min_exp_val = filters['min_experience']
+    if filters.get('city'):
+        st.session_state.city_filter_val = filters['city']
+    if filters.get('position_keywords') and len(filters['position_keywords']) > 0:
+        st.session_state.position_keywords_val = filters['position_keywords']
+    if filters.get('skills_keywords') and len(filters['skills_keywords']) > 0:
+        st.session_state.skills_keywords_val = filters['skills_keywords']
+
+# ====================== Сайдбар с фильтрами ======================
+with st.sidebar:
+    st.header("⚙️ Настройки фильтров")
+    
+    use_auto = st.checkbox("🤖 Использовать авто-фильтры из вакансии", value=True, 
+                           help="Автоматически извлекает возраст, опыт, город, ключевые слова из текста вакансии")
+    use_manual = st.checkbox("✋ Использовать ручные фильтры", value=True)
+    
+    st.divider()
+    
+    st.subheader("📋 Ручные требования")
+    
+    # Возраст с синхронизацией
+    min_age = st.number_input("Минимальный возраст", 18, 60, value=st.session_state.min_age_val, key="min_age_input")
+    max_age = st.number_input("Максимальный возраст", 20, 70, value=st.session_state.max_age_val, key="max_age_input")
+    
+    # Опыт с синхронизацией
+    min_exp = st.number_input("Минимальный опыт (лет)", 0, 15, value=st.session_state.min_exp_val, key="min_exp_input")
+    
+    # Город с синхронизацией
+    city_filter = st.text_input("Город (оставь пустым = любой)", value=st.session_state.city_filter_val, key="city_filter_input")
+    
+    # Должность с синхронизацией
+    position_keywords = st.multiselect(
+        "Ключевые слова в должности",
+        ["Backend", "Python", "Developer", "Middle", "Senior", "Fullstack", "Frontend", "Engineer"],
+        default=st.session_state.position_keywords_val,
+        key="position_keywords_input"
+    )
+    
+    # Навыки с синхронизацией
+    skills_keywords = st.multiselect(
+        "Ключевые навыки",
+        ["Python", "FastAPI", "Django", "Flask", "PostgreSQL", "Docker", "Kubernetes", "Redis", "SQL", "MongoDB", "Git", "Pytest"],
+        default=st.session_state.skills_keywords_val,
+        key="skills_keywords_input"
+    )
+    
+    st.divider()
+    
+    it_threshold = st.slider("IT Threshold (чувствительность)", 0.0, 10.0, 2.0, 0.5)
+    use_reranking = st.checkbox("Включить reranking (более точный)", value=True)
+    min_score = st.slider("Минимальный semantic score (%)", 10, 40, 15)
+    top_k = st.slider("Сколько кандидатов показывать", 5, 50, 20)
+
+# Обновляем session_state из сайдбара (для синхронизации)
+st.session_state.min_age_val = min_age
+st.session_state.max_age_val = max_age
+st.session_state.min_exp_val = min_exp
+st.session_state.city_filter_val = city_filter
+st.session_state.position_keywords_val = position_keywords
+st.session_state.skills_keywords_val = skills_keywords
 
 # ====================== ОСНОВНАЯ ЧАСТЬ ======================
 
@@ -164,12 +231,23 @@ with col1:
 
 with col2:
     st.markdown("### 🎯 Действия")
-    # Кнопка для анализа вакансии и извлечения фильтров
+    
+    # Кнопка для анализа вакансии
     analyze_vacancy_btn = st.button(
-        "🔍 Проанализировать вакансию и извлечь фильтры", 
+        "🔍 Проанализировать вакансию", 
         type="secondary",
         use_container_width=True,
-        help="Нажми, чтобы автоматически извлечь требования из текста вакансии"
+        help="Нажми, чтобы автоматически извлечь требования из текста вакансии и заполнить фильтры"
+    )
+    
+    st.markdown("---")
+    
+    # Кнопка для сброса фильтров
+    reset_filters_btn = st.button(
+        "🔄 Сбросить фильтры к стандартным", 
+        type="secondary",
+        use_container_width=True,
+        help="Сбросить все фильтры к значениям по умолчанию"
     )
     
     st.markdown("---")
@@ -181,13 +259,27 @@ with col2:
         use_container_width=True
     )
 
+# Обработка кнопки "Сбросить фильтры"
+if reset_filters_btn:
+    st.session_state.min_age_val = 23
+    st.session_state.max_age_val = 45
+    st.session_state.min_exp_val = 4
+    st.session_state.city_filter_val = ""
+    st.session_state.position_keywords_val = ["Backend", "Python", "Developer"]
+    st.session_state.skills_keywords_val = ["Python", "FastAPI", "PostgreSQL", "Docker"]
+    st.rerun()
+
 # Обработка кнопки "Проанализировать вакансию"
 if analyze_vacancy_btn:
     with st.spinner("🔍 Анализирую вакансию и извлекаю фильтры..."):
         st.session_state.auto_filters = extract_filters_from_text(vacancy_text)
         st.session_state.vacancy_text = vacancy_text
         st.session_state.filters_applied = True
-        st.success("✅ Фильтры извлечены из вакансии!")
+        
+        # Обновляем фильтры в сайдбаре
+        update_filters_in_sidebar(st.session_state.auto_filters)
+        
+        st.success("✅ Фильтры извлечены из вакансии и применены к панели фильтров!")
         
         # Показываем извлеченные фильтры
         st.subheader("📊 Извлеченные из вакансии фильтры:")
@@ -223,6 +315,8 @@ if analyze_vacancy_btn:
                 st.info(f"🛠️ Навыки: {skills_preview}")
             else:
                 st.info("🛠️ Навыки: не указаны")
+        
+        st.rerun()
 
 # Загрузка файла с резюме
 uploaded_file = st.file_uploader("📁 Загрузи файл с резюме (resumes_generated.txt)", type=["txt"])
@@ -238,7 +332,7 @@ if search_btn:
         f.write(uploaded_file.getbuffer())
     st.success("✅ Файл с резюме загружен!")
     
-    # Формируем фильтры
+    # Формируем фильтры (берем текущие значения из сайдбара)
     manual_filters = {
         'min_age': min_age,
         'max_age': max_age,
@@ -259,7 +353,6 @@ if search_btn:
     if use_auto:
         final_filters.update(auto_filters)
     if use_manual:
-        # Ручные фильтры переопределяют авто
         for key, value in manual_filters.items():
             if value:
                 final_filters[key] = value
@@ -421,7 +514,9 @@ if search_btn:
     # Показываем примененные фильтры
     with st.expander("🔍 Примененные фильтры", expanded=True):
         if final_filters:
-            st.json(final_filters)
+            # Очищаем None значения
+            clean_filters = {k: v for k, v in final_filters.items() if v}
+            st.json(clean_filters)
         else:
             st.info("Фильтры не применены")
     
@@ -465,7 +560,31 @@ if search_btn:
         cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'rerank_score_percent', 'salary']
         cols = [c for c in cols if c in df.columns]
         st.dataframe(df[cols], use_container_width=True, hide_index=True)
+        
+        # Детальная информация по топ-кандидатам
+        with st.expander("📋 Детальная информация о топ-кандидатах"):
+            for i, cand in enumerate(top_candidates[:5], 1):
+                st.markdown(f"**{i}. {cand.get('name', 'Неизвестно')}**")
+                st.text(f"   Возраст: {cand.get('parsed_age', '?')} лет")
+                st.text(f"   Опыт: {cand.get('parsed_experience', '?')} лет")
+                st.text(f"   Город: {cand.get('city', '?')}")
+                st.text(f"   Зарплата: {cand.get('salary', '?')}")
+                st.text(f"   Совместимость: {cand.get('score', 0)}%")
+                if cand.get('rerank_score_percent'):
+                    st.text(f"   Точность (rerank): {cand.get('rerank_score_percent')}%")
+                st.markdown("---")
     else:
         st.warning("⚠️ Не найдено кандидатов, соответствующих критериям")
+        
+        with st.expander("💡 Как улучшить результаты?"):
+            st.markdown("""
+            **Попробуйте:**
+            - Снизить минимальный опыт
+            - Расширить возрастные рамки
+            - Убрать или добавить город
+            - Снизить порог IT Threshold
+            - Уменьшить минимальный semantic score
+            - Добавить больше ключевых слов в навыки
+            """)
 
 st.caption("Сделано на Streamlit + SentenceTransformer • AI HR Скринер 2026")
