@@ -62,21 +62,6 @@ with st.sidebar:
 
 # ====================== ОСНОВНАЯ ЧАСТЬ ======================
 
-# Текст требований к вакансии (фиксированный или можно редактировать)
-st.subheader("📝 Требования к вакансии")
-vacancy_text = st.text_area(
-    "Опишите требования к кандидату (используется для семантического поиска)",
-    value="""Требования к кандидату:
-- Опыт разработки на Python от 4 лет
-- Знание FastAPI или Django
-- Опыт работы с PostgreSQL
-- Знание Docker
-- Понимание REST API
-- Опыт работы с Git""",
-    height=200,
-    key="vacancy_input"
-)
-
 # Загрузка файла с резюме
 uploaded_file = st.file_uploader("📁 Загрузи файл с резюме (resumes_generated.txt)", type=["txt"])
 
@@ -203,8 +188,11 @@ if search_btn:
         
         # Запускаем ранжирование только для прошедших фильтр
         if filtered_candidates:
+            # Используем фиктивный текст вакансии для семантического поиска
+            vacancy_text_for_search = "Python Backend Developer with experience in FastAPI, Django, PostgreSQL, Docker"
+            
             top_candidates = hr_core.rank_candidates(
-                vacancy_text=vacancy_text,
+                vacancy_text=vacancy_text_for_search,
                 resumes=filtered_candidates,
                 manual_filters=None,
                 use_filters=False,
@@ -255,7 +243,7 @@ if search_btn:
                 st.text(f"   💼 Опыт: {cand.get('parsed_experience', cand.get('experience', '?'))} лет")
                 st.text(f"   📍 Город: {cand.get('city', '?')}")
                 st.text(f"   💰 Зарплата: {cand.get('salary', '?')}")
-                st.text(f"   🎯 Совместимость с требованиями: {cand.get('score', 0)}%")
+                st.text(f"   🎯 Совместимость: {cand.get('score', 0)}%")
                 if cand.get('rerank_score_percent'):
                     st.text(f"   🎯 Точность (rerank): {cand.get('rerank_score_percent')}%")
                 st.markdown("---")
