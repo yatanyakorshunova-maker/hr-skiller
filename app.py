@@ -28,14 +28,8 @@ if 'vacancy_text' not in st.session_state:
 - Возраст от 23 до 45 лет
 - Город: любой"""
 
-if 'auto_filters' not in st.session_state:
-    st.session_state.auto_filters = {}
-
-if 'use_auto_filters' not in st.session_state:
-    st.session_state.use_auto_filters = True
-
-if 'use_manual_filters' not in st.session_state:
-    st.session_state.use_manual_filters = True
+if 'extracted_filters' not in st.session_state:
+    st.session_state.extracted_filters = {}
 
 # Значения фильтров по умолчанию
 DEFAULT_FILTERS = {
@@ -151,47 +145,29 @@ def extract_filters_from_text(text: str) -> Dict:
 with st.sidebar:
     st.header("⚙️ Настройки фильтров")
     
-    use_auto = st.checkbox("🤖 Использовать авто-фильтры из вакансии", 
-                           value=st.session_state.use_auto_filters,
-                           key="use_auto_checkbox")
-    use_manual = st.checkbox("✋ Использовать ручные фильтры", 
-                             value=st.session_state.use_manual_filters,
-                             key="use_manual_checkbox")
-    
-    st.session_state.use_auto_filters = use_auto
-    st.session_state.use_manual_filters = use_manual
+    use_auto = st.checkbox("🤖 Использовать авто-фильтры из вакансии", value=True)
+    use_manual = st.checkbox("✋ Использовать ручные фильтры", value=True)
     
     st.divider()
     
-    st.subheader("📋 Требования")
+    st.subheader("📋 Ручные требования")
     
-    # Слайдеры с привязкой к session_state
-    min_age = st.slider("Минимальный возраст", 18, 60, 
-                        value=st.session_state.min_age, 
-                        key="min_age_slider")
-    max_age = st.slider("Максимальный возраст", 20, 70, 
-                        value=st.session_state.max_age, 
-                        key="max_age_slider")
-    min_exp = st.slider("Минимальный опыт (лет)", 0, 15, 
-                        value=st.session_state.min_exp, 
-                        key="min_exp_slider")
+    min_age = st.slider("Минимальный возраст", 18, 60, value=st.session_state.min_age)
+    max_age = st.slider("Максимальный возраст", 18, 70, value=st.session_state.max_age)
+    min_exp = st.slider("Минимальный опыт (лет)", 0, 15, value=st.session_state.min_exp)
     
-    city_filter = st.text_input("Город (оставь пустым = любой)", 
-                                value=st.session_state.city_filter,
-                                key="city_input")
+    city_filter = st.text_input("Город (оставь пустым = любой)", value=st.session_state.city_filter)
     
     position_keywords = st.multiselect(
         "Ключевые слова в должности",
         ["Backend", "Python", "Developer", "Middle", "Senior", "Fullstack", "Frontend", "DevOps"],
-        default=st.session_state.position_keywords,
-        key="position_multiselect"
+        default=st.session_state.position_keywords
     )
     
     skills_keywords = st.multiselect(
         "Ключевые навыки",
         ["Python", "FastAPI", "Django", "Flask", "PostgreSQL", "Docker", "Kubernetes", "Redis", "SQL", "MongoDB", "Git"],
-        default=st.session_state.skills_keywords,
-        key="skills_multiselect"
+        default=st.session_state.skills_keywords
     )
     
     # Сохраняем значения в session_state
@@ -217,23 +193,19 @@ with col1:
     vacancy_text = st.text_area(
         "📝 Вставь текст вакансии сюда",
         value=st.session_state.vacancy_text,
-        height=300,
-        key="vacancy_input"
+        height=250
     )
     st.session_state.vacancy_text = vacancy_text
 
 with col2:
     st.markdown("### 🎯 Действия")
     
-    # Кнопка для применения фильтров из вакансии
-    apply_filters_btn = st.button(
-        "📥 Применить фильтры из вакансии", 
+    analyze_btn = st.button(
+        "🔍 Проанализировать вакансию", 
         type="secondary",
         use_container_width=True,
-        help="Извлечь фильтры из текста вакансии и применить их"
+        help="Извлечь фильтры из текста вакансии"
     )
-    
-    st.markdown("---")
     
     reset_btn = st.button(
         "🔄 Сбросить фильтры", 
@@ -245,10 +217,94 @@ with col2:
     st.markdown("---")
     
     search_btn = st.button(
-        "🚀 Запустить подбор", 
+        "🚀 Запустить подбор кандидатов", 
         type="primary",
         use_container_width=True
     )
+
+# ====================== ВИДЖЕТ ПРИМЕНЕННЫХ ФИЛЬТРОВ ======================
+# Показываем какие фильтры сейчас активны
+st.subheader("🔍 Активные фильтры")
+
+# Определяем какие фильтры будут применены
+active_filters_display = {}
+
+if use_auto:
+    auto_filters = extract_filters_from_text(vacancy_text)
+    if auto_filters.get('min_age') or auto_filters.get('max_age'):
+        age_str = f"{auto_filters.get('min_age', '?')} - {auto_filters.get('max_age', '?')}"
+        active_filters_display["📅 Возраст (из вакансии)"] = f"{age_str} лет"
+    if auto_filters.get('min_experience'):
+        active_filters_display["💼 Опыт (из вакансии)"] = f"от {auto_filters['min_experience']} лет"
+    if auto_filters.get('city'):
+        active_filters_display["📍 Город (из вакансии)"] = auto_filters['city']
+    if auto_filters.get('position_keywords'):
+        active_filters_display["💼 Должность (из вакансии)"] = ", ".join(auto_filters['position_keywords'][:3])
+    if auto_filters.get('skills_keywords'):
+        active_filters_display["🛠️ Навыки (из вакансии)"] = ", ".join(auto_filters['skills_keywords'][:3])
+
+if use_manual:
+    if min_age:
+        active_filters_display["📅 Минимальный возраст (ручной)"] = f"{min_age} лет"
+    if max_age:
+        active_filters_display["📅 Максимальный возраст (ручной)"] = f"{max_age} лет"
+    if min_exp:
+        active_filters_display["💼 Минимальный опыт (ручной)"] = f"{min_exp} лет"
+    if city_filter:
+        active_filters_display["📍 Город (ручной)"] = city_filter
+    if position_keywords:
+        active_filters_display["💼 Должность (ручная)"] = ", ".join(position_keywords[:3])
+    if skills_keywords:
+        active_filters_display["🛠️ Навыки (ручные)"] = ", ".join(skills_keywords[:3])
+
+if active_filters_display:
+    for key, value in active_filters_display.items():
+        st.info(f"**{key}:** {value}")
+else:
+    st.info("ℹ️ Фильтры не применены. Включите авто-фильтры или ручные фильтры.")
+
+st.divider()
+
+# Обработка кнопки анализа
+if analyze_btn:
+    with st.spinner("🔍 Анализирую вакансию..."):
+        extracted = extract_filters_from_text(vacancy_text)
+        st.session_state.extracted_filters = extracted
+        
+        # Показываем извлеченные фильтры
+        st.subheader("📊 Извлеченные из вакансии фильтры:")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if extracted.get('min_age') or extracted.get('max_age'):
+                age_str = f"{extracted.get('min_age', '?')} - {extracted.get('max_age', '?')}"
+                st.success(f"📅 Возраст: {age_str} лет")
+            else:
+                st.info("📅 Возраст: не указан")
+            
+            if extracted.get('min_experience'):
+                st.success(f"💼 Опыт: от {extracted['min_experience']} лет")
+            else:
+                st.info("💼 Опыт: не указан")
+            
+            if extracted.get('city'):
+                st.success(f"📍 Город: {extracted['city']}")
+            else:
+                st.info("📍 Город: не указан")
+        
+        with col_b:
+            if extracted.get('position_keywords'):
+                st.success(f"💼 Должность: {', '.join(extracted['position_keywords'][:5])}")
+            else:
+                st.info("💼 Должность: не указана")
+            
+            if extracted.get('skills_keywords'):
+                skills_str = ', '.join(extracted['skills_keywords'][:5])
+                st.success(f"🛠️ Навыки: {skills_str}")
+            else:
+                st.info("🛠️ Навыки: не указаны")
+        
+        st.info("💡 Нажмите 'Запустить подбор кандидатов' чтобы применить эти фильтры")
 
 # Обработка кнопки сброса
 if reset_btn:
@@ -259,41 +315,6 @@ if reset_btn:
     st.session_state.position_keywords = DEFAULT_FILTERS['position_keywords']
     st.session_state.skills_keywords = DEFAULT_FILTERS['skills_keywords']
     st.rerun()
-
-# Обработка кнопки применения фильтров
-if apply_filters_btn:
-    with st.spinner("🔍 Извлекаю фильтры из вакансии..."):
-        extracted = extract_filters_from_text(vacancy_text)
-        
-        # Обновляем session_state с извлеченными значениями
-        if extracted.get('min_age'):
-            st.session_state.min_age = extracted['min_age']
-        if extracted.get('max_age'):
-            st.session_state.max_age = extracted['max_age']
-        if extracted.get('min_experience'):
-            st.session_state.min_exp = extracted['min_experience']
-        if extracted.get('city'):
-            st.session_state.city_filter = extracted['city']
-        if extracted.get('position_keywords') and len(extracted['position_keywords']) > 0:
-            st.session_state.position_keywords = extracted['position_keywords']
-        if extracted.get('skills_keywords') and len(extracted['skills_keywords']) > 0:
-            st.session_state.skills_keywords = extracted['skills_keywords']
-        
-        st.session_state.auto_filters = extracted
-        
-        st.success("✅ Фильтры извлечены и применены!")
-        
-        # Показываем что извлечено
-        st.info(f"""
-        **Извлечено из вакансии:**
-        - Возраст: {extracted.get('min_age', '?')} - {extracted.get('max_age', '?')} лет
-        - Опыт: от {extracted.get('min_experience', '?')} лет
-        - Город: {extracted.get('city', 'не указан')}
-        - Должность: {', '.join(extracted.get('position_keywords', ['не указана']))}
-        - Навыки: {', '.join(extracted.get('skills_keywords', ['не указаны']))}
-        """)
-        
-        st.rerun()
 
 # Загрузка файла
 uploaded_file = st.file_uploader("📁 Загрузи файл с резюме (resumes_generated.txt)", type=["txt"])
@@ -308,29 +329,38 @@ if search_btn:
         f.write(uploaded_file.getbuffer())
     st.success("✅ Файл загружен!")
     
-    # Берем текущие значения фильтров из session_state
-    manual_filters = {
-        'min_age': st.session_state.min_age,
-        'max_age': st.session_state.max_age,
-        'min_experience': st.session_state.min_exp,
-        'city': st.session_state.city_filter if st.session_state.city_filter else None,
-        'position_keywords': st.session_state.position_keywords if st.session_state.position_keywords else [],
-        'skills_keywords': st.session_state.skills_keywords if st.session_state.skills_keywords else []
-    }
+    # Формируем финальные фильтры
+    final_filters = {}
     
-    # Авто-фильтры из вакансии
-    auto_filters = {}
     if use_auto:
         auto_filters = extract_filters_from_text(vacancy_text)
+        # Добавляем только непустые значения
+        if auto_filters.get('min_age'):
+            final_filters['min_age'] = auto_filters['min_age']
+        if auto_filters.get('max_age'):
+            final_filters['max_age'] = auto_filters['max_age']
+        if auto_filters.get('min_experience'):
+            final_filters['min_experience'] = auto_filters['min_experience']
+        if auto_filters.get('city'):
+            final_filters['city'] = auto_filters['city']
+        if auto_filters.get('position_keywords'):
+            final_filters['position_keywords'] = auto_filters['position_keywords']
+        if auto_filters.get('skills_keywords'):
+            final_filters['skills_keywords'] = auto_filters['skills_keywords']
     
-    # Объединяем фильтры
-    final_filters = {}
-    if use_auto:
-        final_filters.update(auto_filters)
     if use_manual:
-        for key, value in manual_filters.items():
-            if value:
-                final_filters[key] = value
+        if min_age:
+            final_filters['min_age'] = min_age
+        if max_age:
+            final_filters['max_age'] = max_age
+        if min_exp:
+            final_filters['min_experience'] = min_exp
+        if city_filter:
+            final_filters['city'] = city_filter
+        if position_keywords:
+            final_filters['position_keywords'] = position_keywords
+        if skills_keywords:
+            final_filters['skills_keywords'] = skills_keywords
     
     # Настройки hr_core
     hr_core.USE_AUTO_FILTERS = use_auto
@@ -338,7 +368,7 @@ if search_btn:
     hr_core.USE_MIN_AGE = True
     hr_core.USE_MAX_AGE = True
     hr_core.USE_MIN_EXPERIENCE = True
-    hr_core.USE_CITY = bool(st.session_state.city_filter) or bool(auto_filters.get('city'))
+    hr_core.USE_CITY = bool(city_filter) or bool(extract_filters_from_text(vacancy_text).get('city'))
     hr_core.USE_POSITION_KEYWORDS = True
     hr_core.USE_SKILLS_KEYWORDS = True
     hr_core.USE_FILTERS = use_auto or use_manual
@@ -351,21 +381,13 @@ if search_btn:
         resumes = hr_core.load_resumes_from_file("resumes_generated.txt")
         original_count = len(resumes)
         
-        stats = {
-            'invalid_name': 0, 'invalid_city': 0, 'no_age': 0, 'no_experience': 0,
-            'non_it': 0, 'filter_age': 0, 'filter_experience': 0, 'filter_city': 0,
-            'filter_position': 0, 'filter_skills': 0, 'passed_all': 0
-        }
-        
-        rejected_details = []
-        use_filters_flag = use_auto or use_manual
+        # Фильтруем кандидатов вручную для точной статистики
+        filtered_candidates = []
+        rejected_candidates = []
+        rejection_reasons = []
         
         for resume in resumes:
-            raw_name = str(resume.get('name', '')).strip()
-            raw_city = str(resume.get('city', '')).strip()
-            raw_position = str(resume.get('desired_position', '')).lower()
-            raw_skills = str(resume.get('skills', '')).lower()
-            
+            # Извлекаем возраст
             age = None
             age_raw = resume.get('age')
             if age_raw:
@@ -373,6 +395,7 @@ if search_btn:
                 if age_match:
                     age = int(age_match.group(1))
             
+            # Извлекаем опыт
             experience = None
             exp_raw = resume.get('experience')
             if exp_raw:
@@ -380,96 +403,131 @@ if search_btn:
                 if exp_match:
                     experience = int(exp_match.group(1))
             
-            if not raw_name or len(raw_name) < 3:
-                stats['invalid_name'] += 1
-                rejected_details.append({'name': raw_name[:35], 'city': raw_city[:20], 'age': age or '?', 'experience': experience or '?', 'reason': 'Некорректное имя'})
-            elif age is None or not (16 <= age <= 70):
-                stats['no_age'] += 1
-                rejected_details.append({'name': raw_name[:35], 'city': raw_city[:20], 'age': age or '?', 'experience': experience or '?', 'reason': f'Некорректный возраст: {resume.get("age", "?")}'})
-            elif experience is None or not (0 <= experience <= 50):
-                stats['no_experience'] += 1
-                rejected_details.append({'name': raw_name[:35], 'city': raw_city[:20], 'age': age or '?', 'experience': experience or '?', 'reason': f'Некорректный опыт: {resume.get("experience", "?")}'})
-            elif not is_valid_russian_city(raw_city):
-                stats['invalid_city'] += 1
-                rejected_details.append({'name': raw_name[:35], 'city': raw_city[:20], 'age': age or '?', 'experience': experience or '?', 'reason': f'Неизвестный город'})
+            # Проверяем фильтры
+            passed = True
+            reason = None
+            
+            # Возраст
+            if final_filters.get('min_age') and age and age < final_filters['min_age']:
+                passed = False
+                reason = f"Возраст {age} < {final_filters['min_age']}"
+            elif final_filters.get('max_age') and age and age > final_filters['max_age']:
+                passed = False
+                reason = f"Возраст {age} > {final_filters['max_age']}"
+            # Опыт
+            elif final_filters.get('min_experience') and experience and experience < final_filters['min_experience']:
+                passed = False
+                reason = f"Опыт {experience} < {final_filters['min_experience']}"
+            # Город
+            elif final_filters.get('city') and final_filters['city'].lower() not in normalize_city(resume.get('city', '')).lower():
+                passed = False
+                reason = f"Город '{resume.get('city')}' ≠ '{final_filters['city']}'"
+            # Должность
+            elif final_filters.get('position_keywords') and len(final_filters['position_keywords']) > 0:
+                pos_text = resume.get('desired_position', '').lower()
+                if not any(kw.lower() in pos_text for kw in final_filters['position_keywords']):
+                    passed = False
+                    reason = f"Должность не содержит ключевых слов"
+            # Навыки
+            elif final_filters.get('skills_keywords') and len(final_filters['skills_keywords']) > 0:
+                skills_text = resume.get('skills', '').lower()
+                if not any(kw.lower() in skills_text for kw in final_filters['skills_keywords']):
+                    passed = False
+                    reason = f"Навыки не содержат ключевых слов"
+            
+            if passed:
+                filtered_candidates.append(resume)
             else:
-                is_it, it_reason = is_it_candidate(resume, threshold=it_threshold)
-                if not is_it:
-                    stats['non_it'] += 1
-                    rejected_details.append({'name': raw_name[:35], 'city': raw_city[:20], 'age': age or '?', 'experience': experience or '?', 'reason': f'Не IT: {it_reason[:50]}'})
-                else:
-                    hr_reason = None
-                    if use_filters_flag and final_filters:
-                        f = final_filters
-                        if f.get('min_age') and age < f['min_age']:
-                            hr_reason = f"Возраст {age} < {f['min_age']}"
-                            stats['filter_age'] += 1
-                        elif f.get('max_age') and age > f['max_age']:
-                            hr_reason = f"Возраст {age} > {f['max_age']}"
-                            stats['filter_age'] += 1
-                        elif f.get('min_experience') and experience < f['min_experience']:
-                            hr_reason = f"Опыт {experience} < {f['min_experience']}"
-                            stats['filter_experience'] += 1
-                        elif f.get('city') and f['city'].lower() not in normalize_city(raw_city).lower():
-                            hr_reason = f"Город '{raw_city}' ≠ '{f['city']}'"
-                            stats['filter_city'] += 1
-                        elif f.get('position_keywords') and len(f['position_keywords']) > 0:
-                            if not any(kw.lower() in raw_position for kw in f['position_keywords']):
-                                hr_reason = "Должность не подходит"
-                                stats['filter_position'] += 1
-                        elif f.get('skills_keywords') and len(f['skills_keywords']) > 0:
-                            if not any(kw.lower() in raw_skills for kw in f['skills_keywords']):
-                                hr_reason = "Навыки не подходят"
-                                stats['filter_skills'] += 1
-                    
-                    if hr_reason:
-                        rejected_details.append({'name': raw_name[:35], 'city': raw_city[:20], 'age': age or '?', 'experience': experience or '?', 'reason': hr_reason})
-                    else:
-                        stats['passed_all'] += 1
+                rejected_candidates.append(resume)
+                rejection_reasons.append({
+                    'name': resume.get('name', '?')[:30],
+                    'age': age,
+                    'experience': experience,
+                    'city': resume.get('city', '?'),
+                    'reason': reason
+                })
         
-        top_candidates = hr_core.rank_candidates(
-            vacancy_text=vacancy_text,
-            resumes=resumes,
-            manual_filters=manual_filters if use_manual else None,
-            use_filters=use_filters_flag,
-            use_reranking=use_reranking,
-            min_score=min_score,
-            top_k=top_k,
-            it_threshold=it_threshold
-        )
+        # Запускаем ранжирование только для прошедших фильтр
+        if filtered_candidates:
+            top_candidates = hr_core.rank_candidates(
+                vacancy_text=vacancy_text,
+                resumes=filtered_candidates,
+                manual_filters=None,  # Фильтры уже применены
+                use_filters=False,  # Отключаем фильтры в rank_candidates
+                use_reranking=use_reranking,
+                min_score=min_score,
+                top_k=top_k,
+                it_threshold=it_threshold
+            )
+        else:
+            top_candidates = []
     
-    # Вывод результатов
-    st.success(f"✅ Готово! Найдено {len(top_candidates)} лучших кандидатов")
+    # ====================== ВЫВОД РЕЗУЛЬТАТОВ ======================
+    st.success(f"✅ Готово! Найдено {len(top_candidates)} кандидатов из {original_count}")
     
+    # Метрики
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("📄 Всего", original_count)
+        st.metric("📄 Всего резюме", original_count)
     with col2:
-        st.metric("✅ Прошло", stats['passed_all'])
+        st.metric("✅ Прошло фильтры", len(filtered_candidates))
     with col3:
-        st.metric("❌ Отсеяно", original_count - stats['passed_all'])
+        st.metric("❌ Отсеяно", len(rejected_candidates))
     with col4:
         if original_count > 0:
-            st.metric("📊 % отбора", f"{stats['passed_all']/original_count*100:.1f}%")
+            st.metric("📊 Процент отбора", f"{len(filtered_candidates)/original_count*100:.1f}%")
     
+    # Показываем примененные фильтры
     with st.expander("🔍 Примененные фильтры", expanded=True):
-        clean_filters = {k: v for k, v in final_filters.items() if v}
-        if clean_filters:
+        if final_filters:
+            clean_filters = {k: v for k, v in final_filters.items() if v}
             st.json(clean_filters)
         else:
             st.info("Фильтры не применены")
     
-    with st.expander("📊 Статистика отсева", expanded=True):
-        if rejected_details:
-            st.dataframe(pd.DataFrame(rejected_details), use_container_width=True, hide_index=True)
+    # Показываем отсеянных
+    with st.expander("📊 Отсеянные кандидаты", expanded=True):
+        if rejection_reasons:
+            df_rejected = pd.DataFrame(rejection_reasons)
+            st.dataframe(df_rejected, use_container_width=True, hide_index=True)
+        else:
+            st.info("Нет отсеянных кандидатов")
     
+    # Топ кандидатов
     if top_candidates:
         st.subheader("🏆 ТОП кандидатов")
         df = pd.DataFrame(top_candidates)
         cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'salary']
         cols = [c for c in cols if c in df.columns]
-        st.dataframe(df[cols], use_container_width=True, hide_index=True)
+        
+        # Добавляем цветовую индикацию
+        styled_df = df[cols].copy()
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        
+        # Детальная информация
+        with st.expander("📋 Детальная информация о кандидатах"):
+            for i, cand in enumerate(top_candidates, 1):
+                st.markdown(f"**{i}. {cand.get('name', 'Неизвестно')}**")
+                st.text(f"   📅 Возраст: {cand.get('parsed_age', cand.get('age', '?'))} лет")
+                st.text(f"   💼 Опыт: {cand.get('parsed_experience', cand.get('experience', '?'))} лет")
+                st.text(f"   📍 Город: {cand.get('city', '?')}")
+                st.text(f"   💰 Зарплата: {cand.get('salary', '?')}")
+                st.text(f"   🎯 Совместимость: {cand.get('score', 0)}%")
+                if cand.get('rerank_score_percent'):
+                    st.text(f"   🎯 Точность: {cand.get('rerank_score_percent')}%")
+                st.markdown("---")
     else:
-        st.warning("⚠️ Не найдено подходящих кандидатов")
+        st.warning("⚠️ Не найдено кандидатов, соответствующих критериям")
+        
+        with st.expander("💡 Как улучшить результаты?"):
+            st.markdown("""
+            **Попробуйте:**
+            - Снизить минимальный опыт
+            - Расширить возрастные рамки
+            - Убрать или добавить город
+            - Снизить порог IT Threshold
+            - Уменьшить минимальный semantic score
+            - Добавить больше ключевых слов в навыки
+            """)
 
 st.caption("Сделано на Streamlit + SentenceTransformer • AI HR Скринер 2026")
