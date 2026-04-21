@@ -44,10 +44,8 @@ with st.sidebar:
     top_k = st.slider("Топ кандидатов", 5, 50, 20)
 
 # ====================== Основная область ======================
-vacancy_text = st.text_area(
-    "Текст вакансии",
-    height=280,
-    value="""Ищем Middle Backend Developer (Python) в развивающийся стартап.
+# Фиксированный текст вакансии (скрыт от пользователя)
+vacancy_text = """Ищем Middle Backend Developer (Python) в развивающийся стартап.
 
 Требования:
 - Опыт коммерческой разработки на Python от 4 лет
@@ -57,7 +55,6 @@ vacancy_text = st.text_area(
 - Опыт работы с Redis и очередями
 - Возраст от 23 до 45 лет
 - Город: любой (готовы рассматривать релокацию)"""
-)
 
 uploaded = st.file_uploader("Файл с резюме (resumes_generated.txt)", type="txt")
 
@@ -142,7 +139,5 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
 
     with st.expander("📋 Полный лог + статистика отсева"):
         st.text(console_log)
-
-    st.balloons()
 
 st.caption("Streamlit + SentenceTransformer + твой AI-скринер • 2026")
