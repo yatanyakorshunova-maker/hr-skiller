@@ -15,19 +15,6 @@ st.set_page_config(page_title="AI HR Скринер", layout="wide")
 st.title("🚀 AI HR Скринер — Подбор Python Backend разработчиков")
 st.markdown("Умный подбор кандидатов с фильтрами и нейросетями")
 
-# ====================== ИНИЦИАЛИЗАЦИЯ СОСТОЯНИЯ ======================
-if 'vacancy_text' not in st.session_state:
-    st.session_state.vacancy_text = """Ищем Middle Backend Developer (Python) в развивающийся стартап.
-
-Требования:
-- Опыт коммерческой разработки на Python от 4 лет
-- Уверенное владение FastAPI или Django
-- Опыт работы с PostgreSQL и SQL
-- Знание Docker и основ Kubernetes
-- Опыт работы с Redis и очередями
-- Возраст от 23 до 45 лет
-- Город: любой"""
-
 # ====================== ФУНКЦИЯ ДЛЯ ИЗВЛЕЧЕНИЯ ЧИСЛА ИЗ СТРОКИ ======================
 def extract_number_from_string(text: str) -> int:
     """Извлекает первое число из строки"""
@@ -70,18 +57,25 @@ with st.sidebar:
                              help="Чем выше значение, тем строже проверка на IT-специальность")
     use_reranking = st.checkbox("Включить reranking (более точный)", value=True)
     min_score = st.slider("Минимальный semantic score (%)", 10, 40, 15,
-                          help="Минимальный процент совместимости с вакансией")
+                          help="Минимальный процент совместимости с требованиями")
     top_k = st.slider("Сколько кандидатов показывать", 5, 50, 20)
 
 # ====================== ОСНОВНАЯ ЧАСТЬ ======================
 
+# Текст требований к вакансии (фиксированный или можно редактировать)
+st.subheader("📝 Требования к вакансии")
 vacancy_text = st.text_area(
-    "📝 Вставь текст вакансии сюда",
-    value=st.session_state.vacancy_text,
-    height=250,
+    "Опишите требования к кандидату (используется для семантического поиска)",
+    value="""Требования к кандидату:
+- Опыт разработки на Python от 4 лет
+- Знание FastAPI или Django
+- Опыт работы с PostgreSQL
+- Знание Docker
+- Понимание REST API
+- Опыт работы с Git""",
+    height=200,
     key="vacancy_input"
 )
-st.session_state.vacancy_text = vacancy_text
 
 # Загрузка файла с резюме
 uploaded_file = st.file_uploader("📁 Загрузи файл с резюме (resumes_generated.txt)", type=["txt"])
@@ -100,7 +94,7 @@ if search_btn:
         f.write(uploaded_file.getbuffer())
     st.success("✅ Файл с резюме загружен!")
     
-    # Формируем фильтры (только ручные)
+    # Формируем фильтры
     final_filters = {
         'min_age': min_age,
         'max_age': max_age,
@@ -261,7 +255,7 @@ if search_btn:
                 st.text(f"   💼 Опыт: {cand.get('parsed_experience', cand.get('experience', '?'))} лет")
                 st.text(f"   📍 Город: {cand.get('city', '?')}")
                 st.text(f"   💰 Зарплата: {cand.get('salary', '?')}")
-                st.text(f"   🎯 Совместимость: {cand.get('score', 0)}%")
+                st.text(f"   🎯 Совместимость с требованиями: {cand.get('score', 0)}%")
                 if cand.get('rerank_score_percent'):
                     st.text(f"   🎯 Точность (rerank): {cand.get('rerank_score_percent')}%")
                 st.markdown("---")
