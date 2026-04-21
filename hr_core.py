@@ -219,20 +219,30 @@ def load_resumes_from_file(filename: str) -> List[Dict]:
             if line.startswith('Имя:'):
                 resume['name'] = line[4:].strip()
             elif line.startswith('Возраст:'):
-                resume['age'] = line[8:].strip()
+                age_text = line[8:].strip()
+                # Извлекаем число из возраста
+                age_match = re.search(r'(\d+)', age_text)
+                if age_match:
+                    resume['age'] = age_match.group(1)
+                else:
+                    resume['age'] = age_text
             elif line.startswith('Город:'):
                 resume['city'] = line[6:].strip()
             elif line.startswith('Желаемая должность:'):
                 resume['desired_position'] = line[19:].strip()
-            elif 'Опыт' in line and ':' in line:
-                # Исправлено: теперь ищет "Опыт" в любом месте строки
-                experience_part = line.split(':', 1)[1].strip()
-                # Извлекаем только число из строки (например "5 лет" -> "5")
-                exp_match = re.search(r'(\d+)', experience_part)
-                if exp_match:
-                    resume['experience'] = exp_match.group(1)
+            elif 'Опыт' in line:
+                # ПРАВИЛЬНЫЙ ПАРСИНГ ОПЫТА
+                # Убираем префикс "Опыт" или "Опыт работы"
+                if ':' in line:
+                    exp_part = line.split(':', 1)[1].strip()
                 else:
-                    resume['experience'] = experience_part
+                    exp_part = line.replace('Опыт', '').replace('работы', '').replace(':', '').strip()
+                # Извлекаем число из строки (например "5 лет" -> "5")
+                numbers = re.findall(r'(\d+)', exp_part)
+                if numbers:
+                    resume['experience'] = numbers[0]
+                else:
+                    resume['experience'] = exp_part
             elif line.startswith('Навыки:'):
                 resume['skills'] = line[7:].strip()
             elif line.startswith('Образование:'):
@@ -244,29 +254,36 @@ def load_resumes_from_file(filename: str) -> List[Dict]:
             elif line.startswith('Комментарий:'):
                 resume['comment'] = line[12:].strip()
 
+        # Если имя не найдено или похоже на возраст
         if not resume['name'] or re.match(r'^\d{1,2}\s*лет?$', resume['name'].strip()):
             resume['name'] = "Неизвестный кандидат"
 
-        # Попытка вытащить возраст и опыт из других полей
+        # Если возраст все еще None, пробуем извлечь из других полей
         if not resume.get('age'):
-            for field in ['name', 'desired_position', 'city', 'comment', 'experience']:
+            for field in ['name', 'desired_position', 'city', 'comment']:
                 if resume.get(field):
-                    extracted = extract_age(resume[field])
+                    extracted = extract_age(str(resume[field]))
                     if extracted:
                         resume['age'] = str(extracted)
                         break
 
+        # Если опыт все еще None, пробуем извлечь из других полей
         if not resume.get('experience'):
-            for field in ['experience', 'name', 'comment']:
+            for field in ['name', 'desired_position', 'skills', 'comment']:
                 if resume.get(field):
-                    extracted = extract_experience(resume[field])
+                    extracted = extract_experience(str(resume[field]))
                     if extracted is not None:
                         resume['experience'] = str(extracted)
                         break
 
         resumes.append(resume)
 
+    # Вывод для отладки
     print(f"Загружено {len(resumes)} резюме из файла {filename}")
+    print("Первые 3 резюме для проверки:")
+    for r in resumes[:3]:
+        print(f"  - {r['name']}: возраст={r['age']}, опыт={r['experience']}, город={r['city']}")
+
     return resumes
 
 
