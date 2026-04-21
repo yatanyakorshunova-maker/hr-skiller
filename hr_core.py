@@ -11,8 +11,7 @@ warnings.filterwarnings('ignore')
 # Кастомные библиотеки
 from x_russian_cities import is_valid_russian_city, normalize_city
 
-
-# ====================== ПЕРЕЗАГРУЗКА МОДУЛЯ ======================
+# Импорт IT ключевых слов
 import importlib
 import x_it_keywords
 
@@ -21,15 +20,29 @@ from x_it_keywords import is_it_candidate
 
 print(f"Количество IT-ключевых слов: {x_it_keywords.get_it_keywords_count()}")
 
+# ====================== ГЛОБАЛЬНЫЕ НАСТРОЙКИ ======================
+USE_AUTO_FILTERS = True
+USE_MANUAL_FILTERS = True
+USE_MIN_AGE = True
+USE_MAX_AGE = True
+USE_MIN_EXPERIENCE = True
+USE_CITY = False
+USE_POSITION_KEYWORDS = True
+USE_SKILLS_KEYWORDS = True
+USE_FILTERS = True
+USE_RERANKING = True
+MIN_SCORE = 15.0
+TOP_K = 20
+IT_THRESHOLD = 2.0
 
 # Загрузка моделей
+print("Загрузка моделей...")
 model = SentenceTransformer("ai-forever/sbert_large_nlu_ru")
 reranker = CrossEncoder(
     "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
     max_length=512,
     device='cuda' if torch.cuda.is_available() else 'cpu'
 )
-
 print("Модели успешно загружены")
 
 
@@ -67,14 +80,14 @@ def extract_filters_from_vacancy(vacancy_text: str) -> dict:
         if is_valid_russian_city(city_name):
             filters['city'] = city_name
 
-    # Ключевые слова должности (простые популярные варианты)
+    # Ключевые слова должности
     position_patterns = ['data scientist', 'ml engineer', 'machine learning', 'backend', 'frontend', 
                          'fullstack', 'python developer', 'java developer', 'middle', 'senior']
     for pat in position_patterns:
         if pat in text:
             filters['position_keywords'].append(pat.title())
 
-    # Навыки (самые частые)
+    # Навыки
     skill_patterns = ['python', 'fastapi', 'django', 'flask', 'sql', 'postgresql', 'docker', 
                       'kubernetes', 'redis', 'pytorch', 'tensorflow', 'pandas', 'react', 'typescript']
     for skill in skill_patterns:
@@ -289,7 +302,7 @@ def rank_candidates(
     min_score: float = 15.0,
     top_k: int = 20,
     rerank_top: int = 40,
-    it_threshold: float = 6.0          # Порог для IT-фильтра
+    it_threshold: float = 6.0
 ) -> List[Dict]:
     
     # ====================== ФОРМИРОВАНИЕ ФИЛЬТРОВ ======================
@@ -353,7 +366,7 @@ def rank_candidates(
             reason = "Имя и город, скорее всего, перепутаны местами"
 
         # ====================== ПРОВЕРКА НА IT-КАНДИДАТА ======================
-        elif True:  # всегда выполняем проверку
+        elif True:
             is_it, it_reason = is_it_candidate(resume, threshold=it_threshold)
             if not is_it:
                 removed_stats["non_it"] += 1
@@ -495,74 +508,3 @@ def rank_candidates(
               f"Город: {cand.get('city', '-'):15} | З/п: {cand.get('salary', '-'):8} | {score_str} (№{cand.get('resume_number')})")
 
     return final_results
-
-
-# ====================== НАСТРОЙКИ ДЛЯ HR ======================
-
-vacancy_text = """
-Ищем Middle Backend Developer (Python) в развивающийся стартап.
-
-Требования:
-- Опыт коммерческой разработки на Python от 4 лет
-- Уверенное владение FastAPI или Django
-- Опыт работы с PostgreSQL и SQL
-- Знание Docker и основ Kubernetes
-- Опыт работы с Redis и очередями
-- Возраст от 23 до 45 лет
-- Город: любой (готовы рассматривать релокацию)
-
-Будет плюсом: опыт с GitLab CI/CD, AWS, микросервисами.
-"""
-
-# ====================== РУЧНЫЕ ФИЛЬТРЫ ======================
-manual_filters = {
-    'min_age': 23,
-    'max_age': 45,
-    'min_experience': 5,
-    'city': None,
-    'position_keywords': ["Backend", "Python", "Developer"],
-    'skills_keywords': ["Python", "FastAPI", "PostgreSQL", "Docker"]
-}
-
-# ====================== ВКЛ/ВЫКЛ ФИЛЬТРОВ ======================
-USE_AUTO_FILTERS = True
-USE_MANUAL_FILTERS = True
-
-USE_MIN_AGE = True
-USE_MAX_AGE = True
-USE_MIN_EXPERIENCE = True
-USE_CITY = False
-USE_POSITION_KEYWORDS = True
-USE_SKILLS_KEYWORDS = True
-
-USE_FILTERS = True
-USE_RERANKING = True
-MIN_SCORE = 15.0
-TOP_K = 20
-
-# Порог чувствительности IT-фильтра
-IT_THRESHOLD = 2.0
-
-# ====================== ЗАПУСК ======================
-print("Запуск системы подбора кандидатов\n")
-
-resumes = load_resumes_from_file("resumes_generated.txt")
-
-top_candidates = rank_candidates(
-    vacancy_text=vacancy_text,
-    resumes=resumes,
-    manual_filters=manual_filters,
-    use_filters=USE_FILTERS,
-    use_reranking=USE_RERANKING,
-    min_score=MIN_SCORE,
-    top_k=TOP_K,
-    it_threshold=IT_THRESHOLD
-)
-
-# ====================== ИТОГОВЫЙ ОТЧЁТ ======================
-print("\n" + "="*130)
-print(f"ГОТОВО | Найдено {len(top_candidates)} лучших кандидатов")
-print("="*130)
-print(f"Вакансия: Middle Backend Developer (Python)")
-print(f"Фильтры: Авто={USE_AUTO_FILTERS}, Ручные={USE_MANUAL_FILTERS} | IT Threshold: {IT_THRESHOLD}")
-print("="*130)
