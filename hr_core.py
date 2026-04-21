@@ -59,22 +59,22 @@ def extract_filters_from_vacancy(vacancy_text: str) -> dict:
     }
 
     # Возраст
-    age_matches = re.findall(r'возраст[а-я\\s]*(\\d{1,2})\\s*[-–—]\\s*(\\d{1,2})', text)
+    age_matches = re.findall(r'возраст[а-я\s]*(\d{1,2})\s*[-–—]\s*(\d{1,2})', text)
     if age_matches:
         filters['min_age'] = int(age_matches[0][0])
         filters['max_age'] = int(age_matches[0][1])
     else:
-        min_age_match = re.search(r'(?:возраст|от)\\s*(\\d{1,2})\\s*(?:год|лет)', text)
+        min_age_match = re.search(r'(?:возраст|от)\s*(\d{1,2})\s*(?:год|лет)', text)
         if min_age_match:
             filters['min_age'] = int(min_age_match.group(1))
 
     # Опыт работы
-    exp_matches = re.findall(r'(?:опыт|стаж)[а-я\\s]*(\\d{1,2})\\s*(?:год|лет|года)', text)
+    exp_matches = re.findall(r'(?:опыт|стаж)[а-я\s]*(\d{1,2})\s*(?:год|лет|года)', text)
     if exp_matches:
         filters['min_experience'] = int(exp_matches[0])
 
     # Город
-    city_match = re.search(r'(?:в|город|локация|регион)[:\\s]+([А-Яа-яЁё\\s-]+)', text)
+    city_match = re.search(r'(?:в|город|локация|регион)[:\s]+([А-Яа-яЁё\s-]+)', text)
     if city_match:
         city_name = city_match.group(1).strip()
         if is_valid_russian_city(city_name):
@@ -224,8 +224,15 @@ def load_resumes_from_file(filename: str) -> List[Dict]:
                 resume['city'] = line[6:].strip()
             elif line.startswith('Желаемая должность:'):
                 resume['desired_position'] = line[19:].strip()
-            elif line.startswith('Опыт') and ':' in line:
-                resume['experience'] = line.split(':', 1)[1].strip()
+            elif 'Опыт' in line and ':' in line:
+                # Исправлено: теперь ищет "Опыт" в любом месте строки
+                experience_part = line.split(':', 1)[1].strip()
+                # Извлекаем только число из строки (например "5 лет" -> "5")
+                exp_match = re.search(r'(\d+)', experience_part)
+                if exp_match:
+                    resume['experience'] = exp_match.group(1)
+                else:
+                    resume['experience'] = experience_part
             elif line.startswith('Навыки:'):
                 resume['skills'] = line[7:].strip()
             elif line.startswith('Образование:'):
@@ -314,13 +321,13 @@ def rank_candidates(
         auto_filters = extract_filters_from_vacancy(vacancy_text)
         filters.update(auto_filters)
 
-    # Ручной фильтр (переопределяет автоматический)
+    # Ручной фильтр
     if USE_MANUAL_FILTERS and manual_filters and len(manual_filters) > 0:
-        print("Применяются ручные фильтры (переопределяют автоматические)")
+        print("Применяются ручные фильтры")
         filters.update(manual_filters)
 
     if not filters:
-        print("Фильтры отключены (ни автоматический, ни ручной не активны)")
+        print("Фильтры отключены")
     else:
         print(f"Применяемые фильтры: {filters}\n")
 
@@ -344,101 +351,72 @@ def rank_candidates(
         age = extract_age(resume.get('age')) if resume.get('age') else None
         experience = extract_experience(resume.get('experience')) if resume.get('experience') else None
 
-        # ====================== ЖЁСТКАЯ ВАЛИДАЦИЯ ======================
+        # Валидация
         if not raw_name or not is_valid_name(raw_name):
             removed_stats["invalid_name"] += 1
             reason = f"Некорректное имя: '{raw_name}'"
-        
         elif age is None or not (16 <= age <= 70):
             removed_stats["no_age"] += 1
             reason = f"Некорректный возраст (было: {resume.get('age')})"
-        
         elif experience is None or not (0 <= experience <= 50):
             removed_stats["no_experience"] += 1
             reason = f"Некорректный опыт (было: {resume.get('experience')})"
-        
         elif not is_valid_russian_city(raw_city):
             removed_stats["invalid_city"] += 1
-            reason = f"Неизвестный или некорректный город: '{raw_city}'"
-        
-        elif len(raw_name.split()) <= 1 and is_valid_russian_city(raw_name):
-            removed_stats["invalid_name"] += 1
-            reason = "Имя и город, скорее всего, перепутаны местами"
-
-        # ====================== ПРОВЕРКА НА IT-КАНДИДАТА ======================
-        elif True:
+            reason = f"Неизвестный город: '{raw_city}'"
+        else:
+            # IT проверка
             is_it, it_reason = is_it_candidate(resume, threshold=it_threshold)
             if not is_it:
                 removed_stats["non_it"] += 1
-                reason = f"Не подходящая IT-специальность ({it_reason})"
-
-        # ====================== HR-ФИЛЬТРЫ ======================
-        hr_filter_reason = None
-        if reason is None and use_filters and filters:
-            if USE_MIN_AGE and filters.get('min_age') and age is not None and age < filters['min_age']:
-                hr_filter_reason = f"Возраст {age} ниже минимального"
-                removed_stats["filter_age"] += 1
-            elif USE_MAX_AGE and filters.get('max_age') and age is not None and age > filters['max_age']:
-                hr_filter_reason = f"Возраст {age} выше максимального"
-                removed_stats["filter_age"] += 1
-            elif USE_MIN_EXPERIENCE and filters.get('min_experience') and experience is not None and experience < filters['min_experience']:
-                hr_filter_reason = f"Опыт {experience} лет меньше требуемого"
-                removed_stats["filter_experience"] += 1
-            elif USE_CITY and filters.get('city') and filters['city'].lower() not in normalize_city(raw_city):
-                hr_filter_reason = f"Город не соответствует фильтру ({filters['city']})"
-                removed_stats["filter_city"] += 1
-            elif USE_POSITION_KEYWORDS and filters.get('position_keywords'):
-                pos_match = any(kw.lower() in raw_position for kw in filters['position_keywords'])
-                if not pos_match:
-                    hr_filter_reason = f"Должность не подходит ({resume.get('desired_position', '—')})"
-                    removed_stats["filter_position"] += 1
-            elif USE_SKILLS_KEYWORDS and filters.get('skills_keywords'):
-                skill_match = any(kw.lower() in raw_skills for kw in filters['skills_keywords'])
-                if not skill_match:
-                    hr_filter_reason = f"Навыки не содержат ключевых слов"
-                    removed_stats["filter_skills"] += 1
-
-        # ====================== СОХРАНЕНИЕ РЕЗЮМЕ ======================
-        if reason is None:
-            resume['parsed_age'] = age
-            resume['parsed_experience'] = experience
-
-            if hr_filter_reason is None:
-                filtered_resumes.append(resume)
+                reason = f"Не IT-специальность ({it_reason})"
             else:
-                resume['hr_filter_reason'] = hr_filter_reason
-                near_miss_resumes.append(resume)
-        else:
-            print(f"Отсеяно | {raw_name[:35]:35} | Город: {raw_city[:25]:25} | Причина: {reason}")
+                # HR-фильтры
+                hr_filter_reason = None
+                if use_filters and filters:
+                    if USE_MIN_AGE and filters.get('min_age') and age is not None and age < filters['min_age']:
+                        hr_filter_reason = f"Возраст {age} < {filters['min_age']}"
+                        removed_stats["filter_age"] += 1
+                    elif USE_MAX_AGE and filters.get('max_age') and age is not None and age > filters['max_age']:
+                        hr_filter_reason = f"Возраст {age} > {filters['max_age']}"
+                        removed_stats["filter_age"] += 1
+                    elif USE_MIN_EXPERIENCE and filters.get('min_experience') and experience is not None and experience < filters['min_experience']:
+                        hr_filter_reason = f"Опыт {experience} < {filters['min_experience']}"
+                        removed_stats["filter_experience"] += 1
+                    elif USE_CITY and filters.get('city') and filters['city'].lower() not in normalize_city(raw_city):
+                        hr_filter_reason = f"Город не соответствует ({filters['city']})"
+                        removed_stats["filter_city"] += 1
+                    elif USE_POSITION_KEYWORDS and filters.get('position_keywords'):
+                        pos_match = any(kw.lower() in raw_position for kw in filters['position_keywords'])
+                        if not pos_match:
+                            hr_filter_reason = f"Должность не подходит ({resume.get('desired_position', '—')})"
+                            removed_stats["filter_position"] += 1
+                    elif USE_SKILLS_KEYWORDS and filters.get('skills_keywords'):
+                        skill_match = any(kw.lower() in raw_skills for kw in filters['skills_keywords'])
+                        if not skill_match:
+                            hr_filter_reason = "Навыки не содержат ключевых слов"
+                            removed_stats["filter_skills"] += 1
+
+                if hr_filter_reason:
+                    reason = hr_filter_reason
+                    resume['hr_filter_reason'] = hr_filter_reason
+                    near_miss_resumes.append(resume)
+                else:
+                    resume['parsed_age'] = age
+                    resume['parsed_experience'] = experience
+                    filtered_resumes.append(resume)
+
+        if reason:
+            print(f"Отсеяно | {raw_name[:35]:35} | Причина: {reason}")
 
     # ====================== ОТЧЁТ ======================
     total_removed = sum(removed_stats.values())
     print("\n" + "="*100)
     print(f"Результат фильтрации: {len(filtered_resumes)} полностью подходящих резюме из {len(resumes)}")
     print(f"Отсеяно: {total_removed} резюме")
-    
-    if total_removed > 0:
-        print("\nПричины отсева:")
-        reason_map = {
-            "invalid_name": "Некорректное имя",
-            "invalid_city": "Неверный / неизвестный город",
-            "no_age": "Проблема с возрастом",
-            "no_experience": "Проблема с опытом",
-            "non_it": "Не подходящая IT-специальность",
-            "filter_age": "Не прошёл фильтр по возрасту",
-            "filter_experience": "Не прошёл фильтр по опыту",
-            "filter_city": "Не прошёл фильтр по городу",
-            "filter_position": "Должность не подходит",
-            "filter_skills": "Не прошёл фильтр по навыкам",
-            "low_score": "Низкий семантический score"
-        }
-        for key, count in removed_stats.items():
-            if count > 0:
-                print(f"   • {reason_map.get(key, key)}: {count}")
-
     print("="*100)
 
-    if not filtered_resumes and not near_miss_resumes:
+    if not filtered_resumes:
         print("Кандидатов не найдено.")
         return []
 
@@ -464,47 +442,7 @@ def rank_candidates(
     results.sort(key=lambda x: x['score'], reverse=True)
 
     if use_reranking and len(results) > 3:
-        print(f"Запускаем reranking топ-{min(rerank_top, len(results))} кандидатов...")
+        print(f"Запускаем reranking...")
         results = rerank_candidates(vacancy_text, results[:rerank_top], top_k)
 
-    final_results = results[:top_k]
-
-    # ====================== ВЫВОД БЛИЗКИХ КАНДИДАТОВ ======================
-    if near_miss_resumes:
-        print("\n" + "="*130)
-        print("БЛИЗКИЕ КАНДИДАТЫ (IT-специалисты, но не прошли HR-фильтры):")
-        print("="*130)
-        
-        near_results = []
-        for resume in near_miss_resumes:
-            resume_text = build_resume_text(resume)
-            if len(resume_text) < 30: 
-                continue
-            similarity = torch.nn.functional.cosine_similarity(
-                vacancy_embedding.unsqueeze(0),
-                model.encode(resume_text, convert_to_tensor=True).unsqueeze(0)
-            ).item()
-            score = round(similarity * 100, 1)
-            near_results.append({**resume, 'score': score})
-
-        near_results.sort(key=lambda x: x['score'], reverse=True)
-
-        for i, cand in enumerate(near_results[:15], 1):
-            print(f"{i:2d}. {cand['name']:38} | Возраст: {cand.get('parsed_age') or cand.get('age'):3} | "
-                  f"Опыт: {cand.get('parsed_experience') or cand.get('experience'):2} лет | "
-                  f"Город: {cand.get('city', '-'):15} | Score: {cand['score']:5.1f}% | "
-                  f"Причина: {cand.get('hr_filter_reason', '—')} (№{cand.get('resume_number')})")
-
-    # ====================== ВЫВОД ТОП КАНДИДАТОВ ======================
-    print("\n" + "="*130)
-    print(f"ТОП-{top_k} КАНДИДАТОВ (полностью соответствуют всем фильтрам) | Reranking: {'ВКЛ' if use_reranking else 'ВЫКЛ'}")
-    print("="*130)
-
-    for i, cand in enumerate(final_results, 1):
-        rerank = cand.get('rerank_score_percent')
-        score_str = f"Retrieval: {cand['score']:5.1f}% → Rerank: {rerank:5.1f}%" if rerank is not None else f"Retrieval: {cand['score']:5.1f}%"
-        print(f"{i:2d}. {cand['name']:38} | Возраст: {cand.get('parsed_age') or cand.get('age'):3} | "
-              f"Опыт: {cand.get('parsed_experience') or cand.get('experience'):2} лет | "
-              f"Город: {cand.get('city', '-'):15} | З/п: {cand.get('salary', '-'):8} | {score_str} (№{cand.get('resume_number')})")
-
-    return final_results
+    return results[:top_k]
