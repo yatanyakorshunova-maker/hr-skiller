@@ -110,8 +110,8 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
     }
     
     # Устанавливаем настройки в hr_core
-    hr_core.USE_AUTO_FILTERS = False  # Отключаем авто-фильтры
-    hr_core.USE_MANUAL_FILTERS = True  # Используем только ручные
+    hr_core.USE_AUTO_FILTERS = False
+    hr_core.USE_MANUAL_FILTERS = True
     hr_core.USE_MIN_AGE = True
     hr_core.USE_MAX_AGE = True
     hr_core.USE_MIN_EXPERIENCE = True
@@ -171,8 +171,21 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
     if top_candidates:
         st.success(f"✅ Найдено {len(top_candidates)} подходящих кандидатов")
         
+        # Преобразуем навыки в читаемый формат, если они хранятся как список
+        for candidate in top_candidates:
+            if 'skills' in candidate and isinstance(candidate['skills'], list):
+                candidate['skills_display'] = ', '.join(candidate['skills'][:8])  # Показываем первые 8 навыков
+                if len(candidate['skills']) > 8:
+                    candidate['skills_display'] += f" (+{len(candidate['skills'])-8})"
+            elif 'skills' in candidate and isinstance(candidate['skills'], str):
+                candidate['skills_display'] = candidate['skills']
+            else:
+                candidate['skills_display'] = '—'
+        
         df = pd.DataFrame(top_candidates)
-        display_cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'rerank_score_percent', 'salary']
+        
+        # Определяем колонки для отображения
+        display_cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'rerank_score_percent', 'salary', 'skills_display']
         display_cols = [c for c in display_cols if c in df.columns]
         
         st.subheader("🏆 ТОП кандидатов")
@@ -186,7 +199,8 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
             'city': 'Город',
             'score': 'Score (%)',
             'rerank_score_percent': 'Rerank (%)',
-            'salary': 'Зарплата'
+            'salary': 'Зарплата',
+            'skills_display': 'Навыки'
         }
         df_display = df_display.rename(columns=rename_map)
         
@@ -195,10 +209,15 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
             if col in df_display.columns:
                 df_display[col] = df_display[col].round(1)
         
+        # Применяем стили для лучшего отображения
         st.dataframe(
             df_display,
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
+            column_config={
+                "Навыки": st.column_config.TextColumn("Навыки", width="large"),
+                "Зарплата": st.column_config.TextColumn("Зарплата", width="medium"),
+            }
         )
         
         # Детальная информация по каждому кандидату
@@ -213,9 +232,24 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
                 with col2:
                     st.write(f"**Зарплата:** {candidate.get('salary', '—')}")
                     st.write(f"**Rerank:** {candidate.get('rerank_score_percent', 0):.1f}%")
+                    st.write(f"**Желаемая должность:** {candidate.get('position', '—')}")
                 
-                if 'skills' in candidate and candidate['skills']:
-                    st.write(f"**Навыки:** {', '.join(candidate['skills'][:10])}")
+                # Навыки с нормальным отображением
+                if 'skills' in candidate:
+                    if isinstance(candidate['skills'], list):
+                        skills_str = ', '.join(candidate['skills'])
+                    else:
+                        skills_str = str(candidate['skills'])
+                    st.write(f"**Навыки:** {skills_str}")
+                
+                if 'education' in candidate and candidate['education']:
+                    st.write(f"**Образование:** {candidate['education'][:200]}")
+                
+                if 'last_job' in candidate and candidate['last_job']:
+                    st.write(f"**Последнее место работы:** {candidate['last_job']}")
+                
+                if 'comment' in candidate and candidate['comment']:
+                    st.write(f"**Комментарий:** {candidate['comment']}")
     else:
         st.warning("⚠️ Не найдено кандидатов, соответствующих критериям")
     
