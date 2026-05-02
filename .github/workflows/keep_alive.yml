@@ -1,0 +1,15 @@
+name: Keep Streamlit App Alive
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
+
+jobs:
+  wake-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake up Streamlit App
+        run: |
+          APP_URL="https://hr-skiller-4fna6myyn4ja2ftgbcob3y.streamlit.app/"
+          curl -L -s -o /dev/null "$APP_URL"
