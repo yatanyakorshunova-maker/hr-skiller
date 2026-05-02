@@ -42,21 +42,22 @@ with st.sidebar:
     st.subheader("👤 Возраст кандидата")
     col1, col2 = st.columns(2)
     with col1:
-        min_age = st.number_input("От (лет)", min_value=14, max_value=100, value=23, step=1)
+        min_age = st.number_input("От (лет)", min_value=14, max_value=100, value=23, step=1, key="min_age")
     with col2:
-        max_age = st.number_input("До (лет)", min_value=14, max_value=100, value=45, step=1)
+        max_age = st.number_input("До (лет)", min_value=14, max_value=100, value=45, step=1, key="max_age")
     
     st.subheader("💼 Опыт работы")
-    min_exp = st.number_input("Минимальный опыт (лет)", min_value=0, max_value=80, value=5, step=1)
+    min_exp = st.number_input("Минимальный опыт (лет)", min_value=0, max_value=80, value=5, step=1, key="min_exp")
     
     st.subheader("📍 Город")
-    city_input = st.text_input("Город(оставьте пустым если любой)", value="")
+    city_input = st.text_input("Город (оставьте пустым если любой)", value="", key="city_input")
     
     st.subheader("📌 Ключевые слова в должности")
     pos_kw_input = st.text_input(
         "Введите через запятую",
         value="",
-        placeholder=""
+        placeholder="Backend, Python, Developer",
+        key="pos_kw_input"
     )
     pos_kw = [kw.strip() for kw in pos_kw_input.split(",") if kw.strip()]
     
@@ -64,21 +65,35 @@ with st.sidebar:
     skill_kw_input = st.text_input(
         "Введите через запятую",
         value="",
-        placeholder=""
+        placeholder="Python, FastAPI, PostgreSQL, Docker",
+        key="skill_kw_input"
     )
     skill_kw = [kw.strip() for kw in skill_kw_input.split(",") if kw.strip()]
     
     st.subheader("🎯 Пороговые значения")
-    it_threshold = st.number_input("IT-порог (0-10)", min_value=0.0, max_value=10.0, value=2.0, step=0.5)
-    min_score = st.number_input("Минимальный semantic score (10-50)", min_value=10.0, max_value=50.0, value=15.0, step=1.0)
-    top_k = st.slider("Топ кандидатов для вывода", min_value=5, max_value=50, value=20, step=5)
+    it_threshold = st.number_input("IT-порог (0-10)", min_value=0.0, max_value=10.0, value=2.0, step=0.5, key="it_threshold")
+    min_score = st.number_input("Минимальный semantic score (10-50)", min_value=10.0, max_value=50.0, value=15.0, step=1.0, key="min_score")
+    top_k = st.slider("Топ кандидатов для вывода", min_value=5, max_value=50, value=20, step=5, key="top_k")
 
 # ====================== Основная область ======================
+st.subheader("📝 Текст вакансии")
+vacancy_text = st.text_area(
+    "Введите описание вакансии",
+    height=200,
+    placeholder="Пример: Ищем Middle Backend Developer (Python) с опытом от 4 лет...",
+    help="Опишите требования к кандидату: опыт, навыки, обязанности",
+    key="vacancy_text"
+)
 
+uploaded = st.file_uploader("📁 Загрузите файл с резюме (resumes_generated.txt)", type="txt", key="file_uploader")
 
-uploaded = st.file_uploader("📁 Загрузите файл с резюме (resumes_generated.txt)", type="txt")
-
-if st.button("🔥 Запустить подбор", type="primary", use_container_width=True):
+if st.button("🔥 Запустить подбор", type="primary", use_container_width=True, key="run_button"):
+    # Проверка: введена ли вакансия
+    if not vacancy_text.strip():
+        st.error("❌ Пожалуйста, введите текст вакансии")
+        st.stop()
+    
+    # Проверка: загружен ли файл
     if not uploaded:
         st.error("❌ Пожалуйста, загрузите файл с резюме")
         st.stop()
@@ -160,10 +175,10 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
     if top_candidates:
         st.success(f"✅ Найдено {len(top_candidates)} подходящих кандидатов")
         
-        # Преобразуем навыки в читаемый формат, если они хранятся как список
+        # Преобразуем навыки в читаемый формат
         for candidate in top_candidates:
             if 'skills' in candidate and isinstance(candidate['skills'], list):
-                candidate['skills_display'] = ', '.join(candidate['skills'][:8])  # Показываем первые 8 навыков
+                candidate['skills_display'] = ', '.join(candidate['skills'][:8])
                 if len(candidate['skills']) > 8:
                     candidate['skills_display'] += f" (+{len(candidate['skills'])-8})"
             elif 'skills' in candidate and isinstance(candidate['skills'], str):
@@ -211,7 +226,7 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
         
         # Детальная информация по каждому кандидату
         st.subheader("📋 Детальная информация")
-        for idx, candidate in enumerate(top_candidates[:5]):  # Показываем топ-5 детально
+        for idx, candidate in enumerate(top_candidates[:5]):
             with st.expander(f"🔹 {idx+1}. {candidate.get('name', 'Unknown')} — Score: {candidate.get('score', 0):.1f}%"):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -223,7 +238,6 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
                     st.write(f"**Rerank:** {candidate.get('rerank_score_percent', 0):.1f}%")
                     st.write(f"**Желаемая должность:** {candidate.get('position', '—')}")
                 
-                # Навыки с нормальным отображением
                 if 'skills' in candidate:
                     if isinstance(candidate['skills'], list):
                         skills_str = ', '.join(candidate['skills'])
