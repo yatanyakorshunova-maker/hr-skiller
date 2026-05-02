@@ -221,9 +221,10 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
             }
         )
         
-        # Детальная информация по каждому кандидату
-        st.subheader("📋 Детальная информация")
-        for idx, candidate in enumerate(top_candidates[:5]):
+        # ====================== ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ПО ВСЕМ КАНДИДАТАМ ======================
+        st.subheader(f"📋 Детальная информация (все {len(top_candidates)} кандидатов)")
+        
+        for idx, candidate in enumerate(top_candidates):
             with st.expander(f"🔹 {idx+1}. {candidate.get('name', 'Unknown')} — Score: {candidate.get('score', 0):.1f}%"):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -235,6 +236,7 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
                     st.write(f"**Rerank:** {candidate.get('rerank_score_percent', 0):.1f}%")
                     st.write(f"**Желаемая должность:** {candidate.get('position', '—')}")
                 
+                # Навыки
                 if 'skills' in candidate:
                     if isinstance(candidate['skills'], list):
                         skills_str = ', '.join(candidate['skills'])
@@ -242,12 +244,15 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
                         skills_str = str(candidate['skills'])
                     st.write(f"**Навыки:** {skills_str}")
                 
+                # Образование
                 if 'education' in candidate and candidate['education']:
                     st.write(f"**Образование:** {candidate['education'][:200]}")
                 
+                # Последнее место работы
                 if 'last_job' in candidate and candidate['last_job']:
                     st.write(f"**Последнее место работы:** {candidate['last_job']}")
                 
+                # Комментарий
                 if 'comment' in candidate and candidate['comment']:
                     st.write(f"**Комментарий:** {candidate['comment']}")
     else:
