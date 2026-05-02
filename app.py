@@ -42,29 +42,29 @@ with st.sidebar:
     st.subheader("👤 Возраст кандидата")
     col1, col2 = st.columns(2)
     with col1:
-        min_age = st.number_input("От (лет)", min_value=18, max_value=70, value=23, step=1)
+        min_age = st.number_input("От (лет)", min_value=14, max_value=100, value=23, step=1)
     with col2:
-        max_age = st.number_input("До (лет)", min_value=18, max_value=70, value=45, step=1)
+        max_age = st.number_input("До (лет)", min_value=14, max_value=100, value=45, step=1)
     
     st.subheader("💼 Опыт работы")
-    min_exp = st.number_input("Минимальный опыт (лет)", min_value=0, max_value=20, value=5, step=1)
+    min_exp = st.number_input("Минимальный опыт (лет)", min_value=0, max_value=80, value=5, step=1)
     
     st.subheader("📍 Город")
-    city_input = st.text_input("Город (оставьте пустым - любой)", value="", placeholder="Например: Москва, Санкт-Петербург")
+    city_input = st.text_input("Город(оставьте пустым если любой)", value="")
     
     st.subheader("📌 Ключевые слова в должности")
     pos_kw_input = st.text_input(
         "Введите через запятую",
-        value="Backend, Python, Developer",
-        placeholder="Backend, Python, Developer, Senior"
+        value="",
+        placeholder=""
     )
     pos_kw = [kw.strip() for kw in pos_kw_input.split(",") if kw.strip()]
     
     st.subheader("🛠️ Ключевые навыки")
     skill_kw_input = st.text_input(
         "Введите через запятую",
-        value="Python, FastAPI, PostgreSQL, Docker",
-        placeholder="Python, FastAPI, PostgreSQL, Docker, Kubernetes"
+        value="",
+        placeholder=""
     )
     skill_kw = [kw.strip() for kw in skill_kw_input.split(",") if kw.strip()]
     
@@ -74,18 +74,7 @@ with st.sidebar:
     top_k = st.slider("Топ кандидатов для вывода", min_value=5, max_value=50, value=20, step=5)
 
 # ====================== Основная область ======================
-vacancy_text = """Ищем Middle Backend Developer (Python) в развивающийся стартап.
 
-Требования:
-- Опыт коммерческой разработки на Python от 4 лет
-- Уверенное владение FastAPI или Django
-- Опыт работы с PostgreSQL и SQL
-- Знание Docker и основ Kubernetes
-- Опыт работы с Redis и очередями
-- Возраст от 23 до 45 лет
-- Город: любой (готовы рассматривать релокацию)"""
-
-st.info("📄 Текст вакансии предустановлен")
 
 uploaded = st.file_uploader("📁 Загрузите файл с резюме (resumes_generated.txt)", type="txt")
 
