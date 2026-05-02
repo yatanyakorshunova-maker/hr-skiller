@@ -168,12 +168,15 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
             filtered_lines.append(line)
     clean_log = '\n'.join(filtered_lines)
     
-    # ====================== Результаты ======================
+    # ====================== РЕЗУЛЬТАТЫ ======================
     if top_candidates:
-        st.success(f"✅ Найдено {len(top_candidates)} подходящих кандидатов")
+        # ===== СОРТИРУЕМ КАНДИДАТОВ ПО SCORE (ОТ БОЛЬШЕГО К МЕНЬШЕМУ) =====
+        top_candidates_sorted = sorted(top_candidates, key=lambda x: x.get('score', 0), reverse=True)
+        
+        st.success(f"✅ Найдено {len(top_candidates_sorted)} подходящих кандидатов")
         
         # Преобразуем навыки в читаемый формат
-        for candidate in top_candidates:
+        for candidate in top_candidates_sorted:
             if 'skills' in candidate and isinstance(candidate['skills'], list):
                 candidate['skills_display'] = ', '.join(candidate['skills'][:8])
                 if len(candidate['skills']) > 8:
@@ -183,13 +186,13 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
             else:
                 candidate['skills_display'] = '—'
         
-        df = pd.DataFrame(top_candidates)
+        df = pd.DataFrame(top_candidates_sorted)
         
         # Определяем колонки для отображения
         display_cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'rerank_score_percent', 'salary', 'skills_display']
         display_cols = [c for c in display_cols if c in df.columns]
         
-        st.subheader("🏆 ТОП кандидатов")
+        st.subheader("🏆 ТОП кандидатов (по убыванию Score)")
         
         # Форматируем для красивого отображения
         df_display = df[display_cols].copy()
@@ -221,11 +224,15 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
             }
         )
         
-        # ====================== ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ПО ВСЕМ КАНДИДАТАМ ======================
-        st.subheader(f"📋 Детальная информация (все {len(top_candidates)} кандидатов)")
+        # ===== ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ПО ВСЕМ КАНДИДАТАМ (ОТСОРТИРОВАННАЯ) =====
+        st.subheader(f"📋 Детальная информация (все {len(top_candidates_sorted)} кандидатов, отсортировано по Score)")
         
-        for idx, candidate in enumerate(top_candidates):
-            with st.expander(f"🔹 {idx+1}. {candidate.get('name', 'Unknown')} — Score: {candidate.get('score', 0):.1f}%"):
+        for idx, candidate in enumerate(top_candidates_sorted):
+            # Формируем заголовок с номером резюме, именем и Score
+            resume_id = candidate.get('resume_id', candidate.get('id', candidate.get('file_name', '')))
+            resume_id_str = f" [ID: {resume_id}]" if resume_id else ""
+            
+            with st.expander(f"🔹 {idx+1}. {candidate.get('name', 'Unknown')}{resume_id_str} — Score: {candidate.get('score', 0):.1f}%"):
                 col1, col2 = st.columns(2)
                 with col1:
                     st.write(f"**Возраст:** {candidate.get('parsed_age', '—')}")
@@ -235,6 +242,12 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
                     st.write(f"**Зарплата:** {candidate.get('salary', '—')}")
                     st.write(f"**Rerank:** {candidate.get('rerank_score_percent', 0):.1f}%")
                     st.write(f"**Желаемая должность:** {candidate.get('position', '—')}")
+                
+                # Номер резюме (если есть отдельное поле)
+                if 'resume_number' in candidate and candidate['resume_number']:
+                    st.write(f"**Номер резюме:** {candidate['resume_number']}")
+                elif 'file_name' in candidate and candidate['file_name']:
+                    st.write(f"**Файл:** {candidate['file_name']}")
                 
                 # Навыки
                 if 'skills' in candidate:
