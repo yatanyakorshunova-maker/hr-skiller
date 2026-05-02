@@ -225,7 +225,7 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
         )
         
         # ===== ДЕТАЛЬНАЯ ИНФОРМАЦИЯ ПО ВСЕМ КАНДИДАТАМ (ОТСОРТИРОВАННАЯ) =====
-        st.subheader(f"📋 Детальная информация (все {len(top_candidates_sorted)} кандидатов, отсортировано по Score)")
+        st.subheader(f"📋 Детальная информация")
         
         for idx, candidate in enumerate(top_candidates_sorted):
             # Формируем заголовок с номером резюме, именем и Score
