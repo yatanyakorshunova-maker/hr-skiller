@@ -76,24 +76,21 @@ with st.sidebar:
     top_k = st.slider("Топ кандидатов для вывода", min_value=5, max_value=50, value=20, step=5, key="top_k")
 
 # ====================== Основная область ======================
-st.subheader("📝 Текст вакансии")
-vacancy_text = st.text_area(
-    "Введите описание вакансии",
-    height=200,
-    placeholder="Пример: Ищем Middle Backend Developer (Python) с опытом от 4 лет...",
-    help="Опишите требования к кандидату: опыт, навыки, обязанности",
-    key="vacancy_text"
-)
+# Текст вакансии (скрыт от пользователя)
+vacancy_text = """Ищем Middle Backend Developer (Python) в развивающийся стартап.
+
+Требования:
+- Опыт коммерческой разработки на Python от 4 лет
+- Уверенное владение FastAPI или Django
+- Опыт работы с PostgreSQL и SQL
+- Знание Docker и основ Kubernetes
+- Опыт работы с Redis и очередями
+- Возраст от 23 до 45 лет
+- Город: любой (готовы рассматривать релокацию)"""
 
 uploaded = st.file_uploader("📁 Загрузите файл с резюме (resumes_generated.txt)", type="txt", key="file_uploader")
 
 if st.button("🔥 Запустить подбор", type="primary", use_container_width=True, key="run_button"):
-    # Проверка: введена ли вакансия
-    if not vacancy_text.strip():
-        st.error("❌ Пожалуйста, введите текст вакансии")
-        st.stop()
-    
-    # Проверка: загружен ли файл
     if not uploaded:
         st.error("❌ Пожалуйста, загрузите файл с резюме")
         st.stop()
