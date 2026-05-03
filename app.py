@@ -72,7 +72,7 @@ vacancy_text = st.text_area(
     "Введите описание вакансии",
     value="",
     height=200,
-    placeholder="Например:\nИщем Python разработчика...\nТребования:\n- Опыт от 3 лет\n- Знание Django\n- PostgreSQL",
+    placeholder="",
     key="vacancy_input"
 )
 
@@ -238,4 +238,4 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
 # возвращаем печать
 builtins.print = original_print
 
-st.caption("AI HR Скринер")  
+st.caption("AI HR Скринер")
