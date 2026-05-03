@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import io
@@ -67,21 +66,13 @@ with st.sidebar:
 
 # ===== ОСНОВНАЯ ОБЛАСТЬ =====
 
-# тестовый ввод текста вакансии
+# пустой блок для ввода вакансии
 st.subheader("📝 Текст вакансии")
 vacancy_text = st.text_area(
-    "Введите описание вакансии (можно редактировать)",
-    value="""Ищем Middle Backend Developer (Python) в развивающийся стартап.
-
-Требования:
-- Опыт коммерческой разработки на Python от 4 лет
-- Уверенное владение FastAPI или Django
-- Опыт работы с PostgreSQL и SQL
-- Знание Docker и основ Kubernetes
-- Опыт работы с Redis и очередями
-- Возраст от 23 до 45 лет
-- Город: любой (готовы рассматривать релокацию)""",
+    "Введите описание вакансии",
+    value="",
     height=200,
+    placeholder="Например:\nИщем Python разработчика...\nТребования:\n- Опыт от 3 лет\n- Знание Django\n- PostgreSQL",
     key="vacancy_input"
 )
 
@@ -247,4 +238,4 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
 # возвращаем печать
 builtins.print = original_print
 
-st.caption("AI HR Скринер • Тестовый ввод вакансии")
+st.caption("AI HR Скринер")  
