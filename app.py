@@ -104,7 +104,6 @@ with st.sidebar:
     st.divider()
     
     # === РУЧНЫЕ ФИЛЬТРЫ ===
-    # Заголовок разный для HR и соискателя
     if is_hr:
         st.subheader("Требования к кандидату")
         st.caption("Фильтры для поиска сотрудника")
@@ -122,11 +121,7 @@ with st.sidebar:
         min_exp = st.number_input("Мин. опыт кандидата (лет)", min_value=0, max_value=50, value=None, placeholder="Не указано")
         city_input = st.text_input("Город работы", value="", placeholder="Оставьте пустым для отключения")
     else:
-        col_exp1, col_exp2 = st.columns(2)
-        with col_exp1:
-            min_exp = st.number_input("Ваш опыт (лет)", min_value=0, max_value=50, value=None, placeholder="Не указано")
-        with col_exp2:
-            pass  # Пусто для симметрии
+        min_exp = st.number_input("Ваш опыт (лет)", min_value=0, max_value=50, value=None, placeholder="Не указано")
         city_input = st.text_input("Ваш город проживания", value="", placeholder="Оставьте пустым для отключения")
     
     st.divider()
@@ -201,7 +196,7 @@ Python разработчик, опыт 5 лет.
     
     uploaded = st.file_uploader("Загрузите файл с вакансиями", type="txt")
     
-    if desired_salary:
+    if 'desired_salary' in locals() and desired_salary:
         st.info(f"Ваши зарплатные ожидания: {desired_salary} тыс. руб.")
 
 st.divider()
@@ -241,7 +236,7 @@ if run_button:
             manual_filters['position_keywords'] = pos_kw
         if skill_kw:
             manual_filters['skills_keywords'] = skill_kw
-        if not is_hr and desired_salary:
+        if not is_hr and 'desired_salary' in locals() and desired_salary:
             manual_filters['desired_salary'] = desired_salary
     
     # ==================== НАСТРОЙКИ HR_CORE ====================
@@ -357,7 +352,8 @@ if run_button:
                 
                 if item.get('skills'):
                     skills_str = ', '.join(item['skills']) if isinstance(item['skills'], list) else item['skills']
-                    st.write(f"**{'Навыки' if is_hr else 'Требования']}:** {skills_str[:300]}")
+                    label = "Навыки" if is_hr else "Требования"
+                    st.write(f"**{label}:** {skills_str[:300]}")
                 
                 if item.get('education'):
                     st.write(f"**Образование:** {item['education'][:200]}")
