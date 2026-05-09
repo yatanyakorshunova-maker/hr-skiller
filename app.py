@@ -20,6 +20,7 @@ st.set_page_config(
 # Кастомный CSS
 st.markdown(f"""
 <style>
+    /* Кнопки синие */
     .stButton > button {{
         background-color: {PRIMARY_COLOR_HEX} !important;
         color: white !important;
@@ -28,28 +29,82 @@ st.markdown(f"""
     .stButton > button:hover {{
         background-color: {PRIMARY_COLOR_HEX}dd !important;
     }}
+    
+    /* Сайдбар - синий фон */
     div[data-testid="stSidebar"] {{
-        border-right: 1px solid {PRIMARY_COLOR_HEX}33;
+        background-color: {PRIMARY_COLOR_HEX} !important;
     }}
+    
+    /* Текст в сайдбаре - черный */
+    div[data-testid="stSidebar"] p,
+    div[data-testid="stSidebar"] label,
+    div[data-testid="stSidebar"] div,
+    div[data-testid="stSidebar"] span,
+    div[data-testid="stSidebar"] h1,
+    div[data-testid="stSidebar"] h2,
+    div[data-testid="stSidebar"] h3,
+    div[data-testid="stSidebar"] .stMarkdown,
+    div[data-testid="stSidebar"] .stNumberInput label,
+    div[data-testid="stSidebar"] .stTextInput label,
+    div[data-testid="stSidebar"] .stSelectbox label,
+    div[data-testid="stSidebar"] .stRadio label,
+    div[data-testid="stSidebar"] .stCheckbox label,
+    div[data-testid="stSidebar"] .stSlider label {{
+        color: #000000 !important;
+    }}
+    
+    /* Сайдбар - заголовки жирные черные */
+    div[data-testid="stSidebar"] .stSubheader {{
+        color: #000000 !important;
+        font-weight: bold !important;
+    }}
+    
+    /* Сайдбар - элементы ввода */
+    div[data-testid="stSidebar"] input,
+    div[data-testid="stSidebar"] .stNumberInput input {{
+        background-color: white !important;
+        color: black !important;
+    }}
+    
+    /* Сайдбар - слайдер */
+    div[data-testid="stSidebar"] .stSlider div {{
+        color: #000000 !important;
+    }}
+    
+    /* Прогресс бар синий */
     .stProgress > div > div > div > div {{
         background-color: {PRIMARY_COLOR_HEX} !important;
     }}
+    
+    /* Заголовки основной области - синие */
     h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {{
         color: {PRIMARY_COLOR_HEX} !important;
     }}
-    body, .stMarkdown, p, div, span, label, .stTextInput label, .stNumberInput label, .stSelectbox label {{
+    
+    /* Весь текст в основной области черный */
+    body, .stMarkdown, p, div, span, label, .stTextInput label, 
+    .stNumberInput label, .stSelectbox label, .stRadio label, 
+    .stCheckbox label, .stSlider label {{
         color: #000000 !important;
     }}
-    .stSidebar p, .stSidebar label, .stSidebar div, .stSidebar span {{
-        color: #000000 !important;
-    }}
+    
+    /* Таблица - текст черный */
     .stDataFrame, .dataframe, .stDataFrame div, .dataframe td, .dataframe th {{
         color: #000000 !important;
     }}
+    
+    /* Информационные блоки */
     .stAlert, .stAlert p, .stAlert div {{
         color: #000000 !important;
     }}
-    .stRadio label, .stCheckbox label {{
+    
+    /* Разделитель */
+    hr {{
+        background-color: {PRIMARY_COLOR_HEX}33 !important;
+    }}
+    
+    /* Чекбоксы и радио */
+    .stRadio div, .stCheckbox div {{
         color: #000000 !important;
     }}
 </style>
@@ -104,13 +159,13 @@ with st.sidebar:
     st.subheader("Источник фильтров")
     
     filter_source = st.radio(
-    "Выберите источник",
-    options=[
-        "Только из текста (автоматически)",
-        "Только ручные",
-        "И то, и другое"
-    ]
-)
+        "Выберите источник",
+        options=[
+            "Только из текста (автоматически)",
+            "Только ручные",
+            "И то, и другое"
+        ]
+    )
     
     use_auto = filter_source in ["Только из текста (автоматически)", "И то, и другое"]
     use_manual = filter_source in ["Только ручные", "И то, и другое"]
