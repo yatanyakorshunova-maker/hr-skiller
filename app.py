@@ -2,13 +2,13 @@ import streamlit as st
 import pandas as pd
 import io
 import sys
-from typing import List, Dict
+from typing import Dict, List
 
 import hr_core
 from x_russian_cities import is_valid_russian_city, normalize_city
 from x_it_keywords import is_it_candidate
 
-# глушим вывод
+# ==================== ГЛУШИМ ЛИШНИЙ ВЫВОД ====================
 import builtins
 original_print = builtins.print
 
@@ -30,111 +30,211 @@ def silenced_print(*args, **kwargs):
 
 builtins.print = silenced_print
 
-# настройки
-st.set_page_config(page_title="AI HR Скринер", layout="wide")
-st.title("🚀 AI HR Скринер")
+# ==================== НАСТРОЙКИ СТРАНИЦЫ ====================
+st.set_page_config(page_title="AI HR Помощник", layout="wide")
+st.title("🤖 AI HR Помощник")
 
-# ===== САЙДБАР =====
-with st.sidebar:
-    st.header("⚙️ Настройки фильтрации")
-    
-    st.subheader("👤 Возраст")
-    col1, col2 = st.columns(2)
-    with col1:
-        min_age = st.number_input("От", min_value=14, max_value=100, value=23, step=1)
-    with col2:
-        max_age = st.number_input("До", min_value=14, max_value=100, value=45, step=1)
-    
-    st.subheader("💼 Опыт")
-    min_exp = st.number_input("Мин. опыт (лет)", min_value=0, max_value=80, value=5, step=1)
-    
-    st.subheader("📍 Город")
-    city_input = st.text_input("Город (пусто - любой)", value="")
-    
-    st.subheader("📌 Ключевые слова в должности")
-    pos_kw_input = st.text_input("Через запятую", value="", placeholder="Backend, Python")
-    pos_kw = [kw.strip() for kw in pos_kw_input.split(",") if kw.strip()]
-    
-    st.subheader("🛠️ Навыки")
-    skill_kw_input = st.text_input("Через запятую", value="", placeholder="Python, FastAPI, Docker")
-    skill_kw = [kw.strip() for kw in skill_kw_input.split(",") if kw.strip()]
-    
-    st.subheader("🎯 Пороги")
-    it_threshold = st.number_input("IT-порог (0-10)", min_value=0.0, max_value=10.0, value=2.0, step=0.5)
-    min_score = st.number_input("Min score (10-50)", min_value=10.0, max_value=50.0, value=15.0, step=1.0)
-    top_k = st.slider("Топ кандидатов", min_value=5, max_value=50, value=20, step=5)
-
-# ===== ОСНОВНАЯ ОБЛАСТЬ =====
-
-# пустой блок для ввода вакансии
-st.subheader("📝 Текст вакансии")
-vacancy_text = st.text_area(
-    "Введите описание вакансии",
-    value="",
-    height=200,
-    placeholder="",
-    key="vacancy_input"
+# ==================== ВЫБОР РЕЖИМА ====================
+st.subheader("👥 Кто вы?")
+mode = st.radio(
+    "Выберите роль",
+    options=["🧑‍💼 HR-менеджер (ищу сотрудника)", "👨‍💻 Соискатель (ищу работу)"],
+    horizontal=True,
+    help="HR ищет кандидатов, Соискатель ищет вакансии"
 )
+
+is_hr = "HR" in mode
+
+# ==================== ИКОНКИ ДЛЯ РАЗНЫХ РЕЖИМОВ ====================
+if is_hr:
+    st.header("🎯 Подбор кандидатов под вакансию")
+else:
+    st.header("🎯 Подбор вакансий под резюме")
+
+col_desc, col_icon = st.columns([4, 1])
+with col_desc:
+    if is_hr:
+        st.markdown("""
+        **Загрузите резюме кандидатов и опишите вакансию** — нейросеть найдет лучших специалистов.
+        - 📄 Файл с резюме (формат как в `resumes_generated.txt`)
+        - 📝 Текст вакансии с требованиями
+        - ⚙️ Настройте фильтры под свои задачи
+        """)
+    else:
+        st.markdown("""
+        **Загрузите список вакансий и опишите свое резюме** — нейросеть найдет подходящие позиции.
+        - 📄 Файл с вакансиями
+        - 📝 Текст вашего резюме
+        - ⚙️ Настройте фильтры под свои пожелания
+        """)
 
 st.divider()
 
-# загрузка файла
-uploaded = st.file_uploader("📁 Загрузите файл с резюме (resumes_generated.txt)", type="txt")
+# ==================== НАСТРОЙКИ ФИЛЬТРАЦИИ ====================
+with st.sidebar:
+    st.header("⚙️ Настройки фильтрации")
+    
+    # === ОТКУДА БРАТЬ ФИЛЬТРЫ ===
+    st.subheader("🎯 Источник фильтров")
+    
+    filter_source = st.radio(
+        "Откуда брать фильтры?",
+        options=[
+            "📝 Только из текста (авто)",
+            "🖐️ Только ручные",
+            "🤝 И то, и другое"
+        ],
+        help="Авто-фильтры извлекаются из текста вакансии/резюме"
+    )
+    
+    use_auto = filter_source in ["📝 Только из текста (авто)", "🤝 И то, и другое"]
+    use_manual = filter_source in ["🖐️ Только ручные", "🤝 И то, и другое"]
+    
+    st.divider()
+    
+    # === РУЧНЫЕ ФИЛЬТРЫ ===
+    st.subheader("🖐️ Ручные фильтры")
+    
+    if is_hr:
+        st.caption("Фильтры для поиска кандидатов")
+    else:
+        st.caption("Фильтры для поиска вакансий")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        min_age = st.number_input("👤 Мин. возраст", min_value=14, max_value=100, value=None, placeholder="Не важно")
+    with col2:
+        max_age = st.number_input("👤 Макс. возраст", min_value=14, max_value=100, value=None, placeholder="Не важно")
+    
+    min_exp = st.number_input("💼 Мин. опыт (лет)", min_value=0, max_value=50, value=None, placeholder="Не важно")
+    
+    city_input = st.text_input("📍 Город", value="", placeholder="Оставьте пустым - не фильтровать")
+    
+    st.subheader("📌 Ключевые слова в должности")
+    pos_kw_input = st.text_input("Через запятую", value="", placeholder="Backend, Python, Data Scientist")
+    pos_kw = [kw.strip() for kw in pos_kw_input.split(",") if kw.strip()]
+    
+    st.subheader("🛠️ Ключевые навыки")
+    skill_kw_input = st.text_input("Через запятую", value="", placeholder="Python, SQL, Docker")
+    skill_kw = [kw.strip() for kw in skill_kw_input.split(",") if kw.strip()]
+    
+    st.divider()
+    
+    # === ПАРАМЕТРЫ РАНЖИРОВАНИЯ ===
+    st.subheader("🎯 Параметры поиска")
+    
+    it_threshold = st.slider("🤖 IT-порог", min_value=0.0, max_value=20.0, value=6.0, step=0.5)
+    min_score = st.slider("📊 Мин. процент совпадения", min_value=0.0, max_value=100.0, value=15.0, step=5.0)
+    top_k = st.slider("🏆 Топ результатов", min_value=5, max_value=50, value=20, step=5)
+    
+    use_reranking = st.checkbox("🔄 Использовать точное ранжирование (медленнее, но точнее)", value=True)
 
-# кнопка
-if st.button("🔥 Запустить подбор", type="primary", use_container_width=True):
+# ==================== ОСНОВНАЯ ОБЛАСТЬ ====================
+
+# Поле для ввода текста (вакансии или резюме)
+if is_hr:
+    st.subheader("📝 Текст вакансии")
+    vacancy_text = st.text_area(
+        "Опишите требования к кандидату",
+        value="",
+        height=200,
+        placeholder="""
+Пример:
+Ищем Python разработчика (Middle/Senior). Опыт от 3 лет.
+Обязательные навыки: FastAPI, PostgreSQL, Docker.
+Возраст: 25-40 лет.
+Город: Москва или удаленно.
+        """,
+        key="vacancy_input"
+    )
+else:
+    st.subheader("📝 Текст вашего резюме")
+    vacancy_text = st.text_area(
+        "Опишите ваш опыт и навыки",
+        value="",
+        height=200,
+        placeholder="""
+Пример:
+Python разработчик, опыт 5 лет.
+Навыки: FastAPI, Django, PostgreSQL, Docker, Kubernetes.
+Ищу работу в Москве или удаленно.
+Возраст: 28 лет.
+        """,
+        key="resume_input"
+    )
+
+st.divider()
+
+# Загрузка файла
+if is_hr:
+    uploaded = st.file_uploader("📁 Загрузите файл с резюме (resumes_generated.txt)", type="txt")
+else:
+    uploaded = st.file_uploader("📁 Загрузите файл с вакансиями", type="txt")
+
+# ==================== КНОПКА ЗАПУСКА ====================
+if st.button("🔥 Начать поиск", type="primary", use_container_width=True):
+    
+    # Проверки
     if not uploaded:
-        st.error("❌ Нет файла с резюме")
+        st.error("❌ Загрузите файл!")
         st.stop()
     
     if not vacancy_text.strip():
-        st.error("❌ Введите текст вакансии")
+        st.error("❌ Введите текст!")
         st.stop()
     
-    # сохраняем файл
-    with open("resumes_generated.txt", "wb") as f:
+    # Сохраняем файл
+    filename = "resumes_generated.txt" if is_hr else "vacancies.txt"
+    with open(filename, "wb") as f:
         f.write(uploaded.getbuffer())
     
-    # фильтры
-    manual_filters = {
-        'min_age': min_age,
-        'max_age': max_age,
-        'min_experience': min_exp,
-        'city': city_input.strip() if city_input.strip() else None,
-        'position_keywords': pos_kw,
-        'skills_keywords': skill_kw
-    }
+    # Формируем фильтры
+    manual_filters = {}
     
-    # настройки hr_core
-    hr_core.USE_AUTO_FILTERS = False
-    hr_core.USE_MANUAL_FILTERS = True
-    hr_core.USE_MIN_AGE = True
-    hr_core.USE_MAX_AGE = True
-    hr_core.USE_MIN_EXPERIENCE = True
+    if use_manual:
+        if min_age is not None:
+            manual_filters['min_age'] = min_age
+        if max_age is not None:
+            manual_filters['max_age'] = max_age
+        if min_exp is not None:
+            manual_filters['min_experience'] = min_exp
+        if city_input.strip():
+            manual_filters['city'] = city_input.strip()
+        if pos_kw:
+            manual_filters['position_keywords'] = pos_kw
+        if skill_kw:
+            manual_filters['skills_keywords'] = skill_kw
+    
+    # Настройки hr_core
+    hr_core.USE_AUTO_FILTERS = use_auto
+    hr_core.USE_MANUAL_FILTERS = use_manual
+    hr_core.USE_MIN_AGE = min_age is not None
+    hr_core.USE_MAX_AGE = max_age is not None
+    hr_core.USE_MIN_EXPERIENCE = min_exp is not None
     hr_core.USE_CITY = bool(city_input.strip())
     hr_core.USE_POSITION_KEYWORDS = bool(pos_kw)
     hr_core.USE_SKILLS_KEYWORDS = bool(skill_kw)
-    hr_core.USE_FILTERS = True
-    hr_core.USE_RERANKING = True
+    hr_core.USE_FILTERS = use_auto or use_manual
+    hr_core.USE_RERANKING = use_reranking
     hr_core.MIN_SCORE = min_score
     hr_core.TOP_K = top_k
     hr_core.IT_THRESHOLD = it_threshold
     
-    # грузим резюме
-    with st.spinner("📂 Загружаем..."):
-        resumes = hr_core.load_resumes_from_file("resumes_generated.txt")
+    # Загружаем данные
+    with st.spinner("📂 Загружаем данные..."):
+        data = hr_core.load_resumes_from_file(filename)
     
-    # ловим вывод
+    # Запускаем анализ
     old_stdout = sys.stdout
     sys.stdout = captured = io.StringIO()
     
     with st.spinner("🧠 Анализ (15-40 сек)..."):
-        top_candidates = hr_core.rank_candidates(
+        results = hr_core.rank_candidates(
             vacancy_text=vacancy_text,
-            resumes=resumes,
-            manual_filters=manual_filters,
-            use_filters=True,
-            use_reranking=True,
+            resumes=data,
+            manual_filters=manual_filters if use_manual else None,
+            use_filters=hr_core.USE_FILTERS,
+            use_reranking=use_reranking,
             min_score=min_score,
             top_k=top_k,
             it_threshold=it_threshold
@@ -143,99 +243,106 @@ if st.button("🔥 Запустить подбор", type="primary", use_contain
     sys.stdout = old_stdout
     console_log = captured.getvalue()
     
-    # чистим лог
-    clean_lines = []
-    for line in console_log.split('\n'):
-        skip = False
-        for phrase in ["семантическое ранжирование", "reranking", "автоматическое извлечение", "ручные фильтры", "применяемые фильтры", "валидацию и фильтрацию", "semantic search"]:
-            if phrase.lower() in line.lower():
-                skip = True
-                break
-        if not skip and line.strip():
-            clean_lines.append(line)
-    clean_log = '\n'.join(clean_lines)
-    
-    # результаты
-    if top_candidates:
-        top_candidates_sorted = sorted(top_candidates, key=lambda x: x.get('score', 0), reverse=True)
+    # ==================== ПОКАЗ РЕЗУЛЬТАТОВ ====================
+    if results:
+        results_sorted = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
         
-        st.success(f"✅ Найдено {len(top_candidates_sorted)} кандидатов")
+        if is_hr:
+            st.success(f"✅ Найдено {len(results_sorted)} подходящих кандидатов")
+        else:
+            st.success(f"✅ Найдено {len(results_sorted)} подходящих вакансий")
         
-        # чистим навыки
-        for c in top_candidates_sorted:
-            if 'skills' in c and isinstance(c['skills'], list):
-                c['skills_display'] = ', '.join(c['skills'][:8])
-                if len(c['skills']) > 8:
-                    c['skills_display'] += f" (+{len(c['skills'])-8})"
-            elif 'skills' in c and isinstance(c['skills'], str):
-                c['skills_display'] = c['skills']
+        # Подготовка данных для таблицы
+        for item in results_sorted:
+            if 'skills' in item and isinstance(item['skills'], list):
+                item['skills_display'] = ', '.join(item['skills'][:5])
+                if len(item['skills']) > 5:
+                    item['skills_display'] += f" (+{len(item['skills'])-5})"
+            elif 'skills' in item and isinstance(item['skills'], str):
+                item['skills_display'] = item['skills'][:100]
             else:
-                c['skills_display'] = '—'
+                item['skills_display'] = '—'
         
-        df = pd.DataFrame(top_candidates_sorted)
+        df = pd.DataFrame(results_sorted)
         
-        cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'rerank_score_percent', 'salary', 'skills_display']
+        # Выбираем колонки для отображения
+        if is_hr:
+            cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'rerank_score_percent', 'skills_display']
+            rename = {
+                'name': 'Имя', 'parsed_age': 'Возраст', 'parsed_experience': 'Опыт',
+                'city': 'Город', 'score': 'Совпадение %', 'rerank_score_percent': 'Точный %',
+                'skills_display': 'Навыки'
+            }
+        else:
+            cols = ['desired_position', 'company', 'salary', 'city', 'score', 'rerank_score_percent', 'skills_display']
+            rename = {
+                'desired_position': 'Должность', 'company': 'Компания', 'salary': 'Зарплата',
+                'city': 'Город', 'score': 'Совпадение %', 'rerank_score_percent': 'Точный %',
+                'skills_display': 'Требования'
+            }
+        
+        # Фильтруем существующие колонки
         cols = [c for c in cols if c in df.columns]
-        
-        st.subheader("🏆 ТОП кандидатов")
-        
         df_display = df[cols].copy()
-        df_display = df_display.rename(columns={
-            'name': 'Имя', 'parsed_age': 'Возраст', 'parsed_experience': 'Опыт', 'city': 'Город',
-            'score': 'Score', 'rerank_score_percent': 'Rerank', 'salary': 'Зарплата', 'skills_display': 'Навыки'
-        })
+        df_display = df_display.rename(columns=rename)
         
-        for col in ['Score', 'Rerank']:
+        for col in ['Совпадение %', 'Точный %']:
             if col in df_display.columns:
                 df_display[col] = df_display[col].round(1)
         
+        st.subheader("🏆 Результаты")
         st.dataframe(df_display, use_container_width=True, hide_index=True)
         
-        # детали
-        st.subheader("📋 Детально")
+        # Детальный просмотр
+        st.subheader("📋 Детальная информация")
         
-        for idx, c in enumerate(top_candidates_sorted):
-            rid = c.get('resume_id') or c.get('id') or c.get('file_name') or ''
-            rid_str = f" [ID: {rid}]" if rid else ""
-            
-            with st.expander(f"🔹 {idx+1}. {c.get('name', 'Unknown')}{rid_str} — Score: {c.get('score', 0):.1f}%"):
+        for idx, item in enumerate(results_sorted):
+            with st.expander(f"🔹 {idx+1}. {item.get('name' if is_hr else 'desired_position', 'Unknown')} — Совпадение: {item.get('score', 0):.1f}%"):
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.write(f"**Возраст:** {c.get('parsed_age', '—')}")
-                    st.write(f"**Опыт:** {c.get('parsed_experience', '—')} лет")
-                    st.write(f"**Город:** {c.get('city', '—')}")
-                with col2:
-                    st.write(f"**Зарплата:** {c.get('salary', '—')}")
-                    st.write(f"**Rerank:** {c.get('rerank_score_percent', 0):.1f}%")
-                    st.write(f"**Должность:** {c.get('position', '—')}")
-                
-                if c.get('resume_number'):
-                    st.write(f"**Номер:** {c['resume_number']}")
-                elif c.get('file_name'):
-                    st.write(f"**Файл:** {c['file_name']}")
-                
-                if 'skills' in c:
-                    if isinstance(c['skills'], list):
-                        st.write(f"**Навыки:** {', '.join(c['skills'])}")
+                    if is_hr:
+                        st.write(f"**Имя:** {item.get('name', '—')}")
+                        st.write(f"**Возраст:** {item.get('parsed_age', '—')}")
+                        st.write(f"**Опыт:** {item.get('parsed_experience', '—')} лет")
                     else:
-                        st.write(f"**Навыки:** {c['skills']}")
+                        st.write(f"**Должность:** {item.get('desired_position', '—')}")
+                        st.write(f"**Компания:** {item.get('company', '—')}")
+                        if item.get('requirements'):
+                            st.write(f"**Требования:** {item.get('requirements', '—')[:200]}")
+                with col2:
+                    st.write(f"**Город:** {item.get('city', '—')}")
+                    st.write(f"**Зарплата:** {item.get('salary', '—')}")
+                    st.write(f"**Совпадение:** {item.get('score', 0):.1f}%")
+                    if item.get('rerank_score_percent'):
+                        st.write(f"**Точное совпадение:** {item.get('rerank_score_percent', 0):.1f}%")
                 
-                if c.get('education'):
-                    st.write(f"**Образование:** {c['education'][:200]}")
+                if item.get('skills'):
+                    skills_str = ', '.join(item['skills']) if isinstance(item['skills'], list) else item['skills']
+                    st.write(f"**{'Навыки' if is_hr else 'Требования'}:** {skills_str[:300]}")
                 
-                if c.get('last_job'):
-                    st.write(f"**Последнее место:** {c['last_job']}")
-                
-                if c.get('comment'):
-                    st.write(f"**Комментарий:** {c['comment']}")
+                if item.get('education'):
+                    st.write(f"**Образование:** {item['education'][:200]}")
     else:
-        st.warning("⚠️ Кандидатов не найдено")
+        st.warning("⚠️ Ничего не найдено. Попробуйте снизить порог совпадения или ослабить фильтры.")
     
-    if clean_log:
-        with st.expander("📋 Лог"):
-            st.text(clean_log)
+    # Показываем лог
+    if console_log:
+        clean_lines = []
+        for line in console_log.split('\n'):
+            skip = False
+            for phrase in ["семантическое", "reranking", "автоматическое", "ручные", "валидацию"]:
+                if phrase.lower() in line.lower():
+                    skip = True
+                    break
+            if not skip and line.strip():
+                clean_lines.append(line)
+        if clean_lines:
+            with st.expander("📋 Журнал работы"):
+                st.text('\n'.join(clean_lines))
 
-# возвращаем печать
+# ==================== ФУТЕР ====================
+st.divider()
+st.caption("🤖 AI HR Помощник | Работает на нейросетях | Ваши данные никуда не отправляются")
+
+# Восстанавливаем печать
 builtins.print = original_print
-
-st.caption("AI HR Скринер")
