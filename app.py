@@ -9,7 +9,6 @@ from x_russian_cities import is_valid_russian_city, normalize_city
 from x_it_keywords import is_it_candidate
 
 # ==================== НАСТРОЙКИ ЦВЕТА ====================
-PRIMARY_COLOR_RGB = (68, 103, 207)
 PRIMARY_COLOR_HEX = "#4467CF"
 
 st.set_page_config(
@@ -35,8 +34,23 @@ st.markdown(f"""
     .stProgress > div > div > div > div {{
         background-color: {PRIMARY_COLOR_HEX} !important;
     }}
-    h1, h2, h3, .stMarkdown h1, .stMarkdown h2 {{
+    h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {{
         color: {PRIMARY_COLOR_HEX} !important;
+    }}
+    body, .stMarkdown, p, div, span, label, .stTextInput label, .stNumberInput label, .stSelectbox label {{
+        color: #000000 !important;
+    }}
+    .stSidebar p, .stSidebar label, .stSidebar div, .stSidebar span {{
+        color: #000000 !important;
+    }}
+    .stDataFrame, .dataframe, .stDataFrame div, .dataframe td, .dataframe th {{
+        color: #000000 !important;
+    }}
+    .stAlert, .stAlert p, .stAlert div {{
+        color: #000000 !important;
+    }}
+    .stRadio label, .stCheckbox label {{
+        color: #000000 !important;
     }}
 </style>
 """, unsafe_allow_html=True)
@@ -90,13 +104,13 @@ with st.sidebar:
     st.subheader("Источник фильтров")
     
     filter_source = st.radio(
-        "Выберите источник",
-        options=[
-            "Только из текста (автоматически)",
-            "Только ручные",
-            "И то, и другое"
-        ]
-    )
+    "Выберите источник",
+    options=[
+        "Только из текста (автоматически)",
+        "Только ручные",
+        "И то, и другое"
+    ]
+)
     
     use_auto = filter_source in ["Только из текста (автоматически)", "И то, и другое"]
     use_manual = filter_source in ["Только ручные", "И то, и другое"]
@@ -106,33 +120,40 @@ with st.sidebar:
     # === РУЧНЫЕ ФИЛЬТРЫ ===
     if is_hr:
         st.subheader("Требования к кандидату")
-        st.caption("Фильтры для поиска сотрудника")
     else:
-        st.subheader("Параметры соискателя")
-        st.caption("Ваши данные для поиска вакансий")
+        st.subheader("Ваши данные")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        min_age = st.number_input("Мин. возраст" if is_hr else "Ваш возраст (от)", min_value=14, max_value=100, value=None, placeholder="Не указано")
-    with col2:
-        max_age = st.number_input("Макс. возраст" if is_hr else "Ваш возраст (до)", min_value=14, max_value=100, value=None, placeholder="Не указано")
+    # Возраст - одно поле для соискателя
+    if is_hr:
+        col1, col2 = st.columns(2)
+        with col1:
+            min_age = st.number_input("Мин. возраст", min_value=14, max_value=100, value=None, placeholder="Не указано")
+        with col2:
+            max_age = st.number_input("Макс. возраст", min_value=14, max_value=100, value=None, placeholder="Не указано")
+    else:
+        age = st.number_input("Ваш возраст", min_value=14, max_value=100, value=None, placeholder="Не указано")
+        min_age = age
+        max_age = age
     
+    # Опыт
     if is_hr:
         min_exp = st.number_input("Мин. опыт кандидата (лет)", min_value=0, max_value=50, value=None, placeholder="Не указано")
-        city_input = st.text_input("Город работы", value="", placeholder="Оставьте пустым для отключения")
     else:
         min_exp = st.number_input("Ваш опыт (лет)", min_value=0, max_value=50, value=None, placeholder="Не указано")
-        city_input = st.text_input("Ваш город проживания", value="", placeholder="Оставьте пустым для отключения")
+    
+    # Город
+    if is_hr:
+        city_input = st.text_input("Город работы", value="", placeholder="Оставьте пустым для отключения")
+    else:
+        city_input = st.text_input("Ваш город", value="", placeholder="Оставьте пустым для отключения")
     
     st.divider()
     
     # === КЛЮЧЕВЫЕ СЛОВА ===
     if is_hr:
         st.subheader("Требуемые навыки и должности")
-        st.caption("Что должен уметь кандидат")
     else:
         st.subheader("Ваши навыки и желаемая должность")
-        st.caption("Что вы умеете и кем хотите работать")
     
     pos_kw_input = st.text_input("Должность / позиция", value="", placeholder="Python разработчик, Data Scientist, Project Manager")
     pos_kw = [kw.strip() for kw in pos_kw_input.split(",") if kw.strip()]
