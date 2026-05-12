@@ -53,21 +53,13 @@ with st.sidebar:
 
 st.subheader("Текст вакансии")
 vacancy_text = st.text_area(
-    "Опишите требования к кандидату",
-    value="",
-    height=200,
-    placeholder="""
-Пример:
-Ищем Python разработчика (Middle/Senior). Опыт от 3 лет.
-Обязательные навыки: FastAPI, PostgreSQL, Docker.
-Возраст: 25-40 лет.
-Город: Москва или удаленно.
+    "
     """
 )
 
 st.divider()
 
-uploaded = st.file_uploader("Загрузите файл с резюме (resumes_generated.txt)", type="txt")
+uploaded = st.file_uploader("Загрузите файл с резюме", type="txt")
 
 st.divider()
 
@@ -184,4 +176,4 @@ if run_button:
             st.error(f"Ошибка: {e}")
 
 st.divider()
-st.caption("AI HR Скринер | Работает через бэкенд FastAPI")
+st.caption("AI HR Скринер")
