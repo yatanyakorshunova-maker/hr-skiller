@@ -1,10 +1,9 @@
 import streamlit as st
 import requests
 import pandas as pd
-import json
 
 # ==================== НАСТРОЙКИ ====================
-API_URL = "http://localhost:8000"  # URL вашего бэкенда
+API_URL = "http://localhost:8000"
 
 st.set_page_config(
     page_title="AI HR Помощник", 
@@ -35,7 +34,6 @@ st.divider()
 with st.sidebar:
     st.header("Настройки фильтрации")
     
-    # === ОТКУДА БРАТЬ ФИЛЬТРЫ ===
     st.subheader("Источник фильтров")
     
     filter_source = st.radio(
@@ -52,13 +50,11 @@ with st.sidebar:
     
     st.divider()
     
-    # === РУЧНЫЕ ФИЛЬТРЫ ===
     if is_hr:
         st.subheader("Требования к кандидату")
     else:
         st.subheader("Ваши данные")
     
-    # Возраст - одно поле для соискателя
     if is_hr:
         col1, col2 = st.columns(2)
         with col1:
@@ -70,13 +66,11 @@ with st.sidebar:
         min_age = age
         max_age = age
     
-    # Опыт
     if is_hr:
         min_exp = st.number_input("Мин. опыт кандидата (лет)", min_value=0, max_value=50, value=None, placeholder="Не указано")
     else:
         min_exp = st.number_input("Ваш опыт (лет)", min_value=0, max_value=50, value=None, placeholder="Не указано")
     
-    # Город
     if is_hr:
         city_input = st.text_input("Город работы", value="", placeholder="Оставьте пустым для отключения")
     else:
@@ -84,7 +78,6 @@ with st.sidebar:
     
     st.divider()
     
-    # === КЛЮЧЕВЫЕ СЛОВА ===
     if is_hr:
         st.subheader("Требуемые навыки и должности")
     else:
@@ -98,14 +91,12 @@ with st.sidebar:
     
     st.divider()
     
-    # === ЖЕЛАЕМАЯ ЗАРПЛАТА (только для соискателя) ===
     if not is_hr:
         st.subheader("Зарплатные ожидания")
         desired_salary = st.number_input("Желаемая зарплата (тыс. руб.)", min_value=0, max_value=1000, value=None, placeholder="Не указано")
     
     st.divider()
     
-    # === ПАРАМЕТРЫ РАНЖИРОВАНИЯ ===
     st.subheader("Параметры поиска")
     
     it_threshold = st.slider("IT-порог", min_value=0.0, max_value=20.0, value=6.0, step=0.5)
@@ -169,9 +160,6 @@ if run_button:
         st.error("Ошибка: текст не введен")
         st.stop()
     
-    # ==================== ФОРМИРУЕМ ЗАПРОС К БЭКЕНДУ ====================
-    
-    # Подготавливаем файлы для отправки
     if is_hr:
         resume_file = ("resumes.txt", uploaded.getvalue(), "text/plain")
     else:
@@ -182,7 +170,6 @@ if run_button:
         "resume_file": resume_file
     }
     
-    # Подготавливаем данные формы
     data = {
         "top_k": str(top_k),
         "min_score": str(min_score),
@@ -192,7 +179,6 @@ if run_button:
         "mode": "hr" if is_hr else "candidate"
     }
     
-    # Добавляем ручные фильтры, если они включены
     if use_manual:
         if min_age is not None:
             data["min_age"] = str(min_age)
@@ -211,7 +197,6 @@ if run_button:
     
     with st.spinner("Анализ (15-40 секунд)..."):
         try:
-            # Отправляем запрос к бэкенду
             response = requests.post(
                 f"{API_URL}/api/v1/match/advanced",
                 files=files,
@@ -224,34 +209,48 @@ if run_button:
                 candidates = result.get("top_candidates", [])
                 
                 if candidates:
-                    st.success(f"Найдено {len(candidates)} подходящих кандидатов" if is_hr else f"Найдено {len(candidates)} подходящих вакансий")
+                    if is_hr:
+                        st.success(f"Найдено {len(candidates)} подходящих кандидатов")
+                    else:
+                        st.success(f"Найдено {len(candidates)} подходящих вакансий")
                     
-                    # Подготовка данных для таблицы
                     df_data = []
                     for c in candidates:
-                        row = {
-                            "Имя" if is_hr else "Должность": c.get("name" if is_hr else "desired_position", "—"),
-                            "Возраст": c.get("age", "—"),
-                            "Город": c.get("city", "—"),
-                            "Опыт": c.get("experience", "—"),
-                            "Совпадение %": c.get("match_score", 0),
-                            "Точный %": c.get("rerank_score_percent", 0)
-                        }
-                        if not is_hr:
-                            row["Зарплата"] = c.get("salary", "—")
-                            row["Требования"] = c.get("skills", "—")[:50]
+                        if is_hr:
+                            row = {
+                                "Имя": c.get("name", "—"),
+                                "Возраст": c.get("age", "—"),
+                                "Город": c.get("city", "—"),
+                                "Опыт": c.get("experience", "—"),
+                                "Совпадение %": c.get("match_score", 0),
+                                "Точный %": c.get("rerank_score_percent", 0),
+                                "Навыки": c.get("skills", "—")[:50]
+                            }
                         else:
-                            row["Навыки"] = c.get("skills", "—")[:50]
+                            row = {
+                                "Должность": c.get("desired_position", "—"),
+                                "Компания": c.get("company", "—"),
+                                "Город": c.get("city", "—"),
+                                "Зарплата": c.get("salary", "—"),
+                                "Совпадение %": c.get("match_score", 0),
+                                "Точный %": c.get("rerank_score_percent", 0),
+                                "Требования": c.get("skills", "—")[:50]
+                            }
                         df_data.append(row)
                     
                     df = pd.DataFrame(df_data)
                     st.dataframe(df, use_container_width=True, hide_index=True)
                     
-                    # Детальный просмотр
                     st.subheader("Детальная информация")
                     
                     for idx, c in enumerate(candidates):
-                        title = f"{idx+1}. {c.get('name' if is_hr else 'desired_position', 'Unknown')} - Совпадение: {c.get('match_score', 0):.1f}%"
+                        if is_hr:
+                            name = c.get("name", "Unknown")
+                            title = f"{idx+1}. {name} - Совпадение: {c.get('match_score', 0):.1f}%"
+                        else:
+                            name = c.get("desired_position", "Unknown")
+                            title = f"{idx+1}. {name} - Совпадение: {c.get('match_score', 0):.1f}%"
+                        
                         with st.expander(title):
                             col1, col2 = st.columns(2)
                             with col1:
@@ -262,13 +261,29 @@ if run_button:
                                 else:
                                     st.write(f"**Должность:** {c.get('desired_position', '—')}")
                                     st.write(f"**Компания:** {c.get('company', '—')}")
-   if c.get('skills'):
-    skills_str = c.get('skills', '—')
-    if len(skills_str) > 300:
-        skills_str = skills_str[:300]
-    label = "Навыки" if is_hr else "Требования"
-    st.write(f"**{label}:** {skills_str}")
-            st.error("Не удалось подключиться к бэкенду. Убедитесь, что он запущен на " + API_URL)
+                            with col2:
+                                st.write(f"**Город:** {c.get('city', '—')}")
+                                st.write(f"**Зарплата:** {c.get('salary', '—')}")
+                                st.write(f"**Совпадение:** {c.get('match_score', 0):.1f}%")
+                                if c.get('rerank_score_percent'):
+                                    st.write(f"**Точное совпадение:** {c.get('rerank_score_percent', 0):.1f}%")
+                            
+                            if c.get('skills'):
+                                skills_str = c.get('skills', '—')
+                                if len(skills_str) > 300:
+                                    skills_str = skills_str[:300]
+                                if is_hr:
+                                    st.write(f"**Навыки:** {skills_str}")
+                                else:
+                                    st.write(f"**Требования:** {skills_str}")
+                else:
+                    st.warning("Ничего не найдено. Попробуйте снизить порог совпадения.")
+            else:
+                st.error(f"Ошибка API: {response.status_code}")
+                st.code(response.text)
+                
+        except requests.exceptions.ConnectionError:
+            st.error(f"Не удалось подключиться к бэкенду. Убедитесь, что он запущен на {API_URL}")
         except requests.exceptions.Timeout:
             st.error("Превышено время ожидания. Попробуйте уменьшить количество резюме.")
         except Exception as e:
