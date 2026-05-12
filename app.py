@@ -3,7 +3,8 @@ import requests
 import pandas as pd
 
 # ==================== НАСТРОЙКИ ====================
-API_URL = "http://localhost:8000"
+API_URL = "http://localhost:8000"  # Если бэк на этом же компьютере
+# API_URL = "https://ваш-бэкенд.onrender.com"  # Если бэк в интернете
 
 st.set_page_config(
     page_title="AI HR Скринер", 
@@ -11,7 +12,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ==================== ЗАГОЛОВОК ====================
 st.title("AI HR Скринер")
 st.header("Подбор кандидатов под вакансию")
 
@@ -63,7 +63,6 @@ uploaded = st.file_uploader("Загрузите файл с резюме", type=
 
 st.divider()
 
-# ==================== КНОПКА ЗАПУСКА ====================
 col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
 with col_btn2:
     run_button = st.button("Запустить подбор", type="primary", use_container_width=True)
@@ -144,24 +143,16 @@ if run_button:
                                 st.write(f"**Имя:** {c.get('name', '—')}")
                                 st.write(f"**Возраст:** {c.get('age', '—')}")
                                 st.write(f"**Опыт:** {c.get('experience', '—')} лет")
-                                if c.get('education'):
-                                    st.write(f"**Образование:** {c.get('education', '—')[:200]}")
                             with col2:
                                 st.write(f"**Город:** {c.get('city', '—')}")
                                 st.write(f"**Зарплата:** {c.get('salary', '—')}")
-                                st.write(f"**Должность:** {c.get('desired_position', '—')}")
                                 st.write(f"**Совпадение:** {c.get('match_score', 0):.1f}%")
-                                if c.get('rerank_score_percent'):
-                                    st.write(f"**Точное совпадение:** {c.get('rerank_score_percent', 0):.1f}%")
                             
                             if c.get('skills'):
                                 skills_str = c.get('skills', '—')
                                 if len(skills_str) > 300:
                                     skills_str = skills_str[:300]
                                 st.write(f"**Навыки:** {skills_str}")
-                            
-                            if c.get('last_job'):
-                                st.write(f"**Последнее место работы:** {c.get('last_job', '—')}")
                 else:
                     st.warning("Ничего не найдено. Попробуйте снизить порог совпадения.")
             else:
@@ -171,7 +162,7 @@ if run_button:
         except requests.exceptions.ConnectionError:
             st.error(f"Не удалось подключиться к бэкенду. Убедитесь, что он запущен на {API_URL}")
         except requests.exceptions.Timeout:
-            st.error("Превышено время ожидания. Попробуйте уменьшить количество резюме.")
+            st.error("Превышено время ожидания.")
         except Exception as e:
             st.error(f"Ошибка: {e}")
 
