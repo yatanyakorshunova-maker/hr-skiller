@@ -22,21 +22,23 @@ with st.sidebar:
     st.header("Настройки фильтрации")
     
     st.subheader("Возраст")
-    min_age = st.number_input("Мин. возраст", min_value=14, max_value=100, value=None, placeholder="Не указано", label_visibility="collapsed")
-    max_age = st.number_input("Макс. возраст", min_value=14, max_value=100, value=None, placeholder="Не указано", label_visibility="collapsed")
+    st.markdown("**От**")
+    min_age = st.number_input("От", min_value=14, max_value=100, value=None, placeholder="Не указано", label_visibility="collapsed")
+    st.markdown("**До**")
+    max_age = st.number_input("До", min_value=14, max_value=100, value=None, placeholder="Не указано", label_visibility="collapsed")
     
     st.subheader("Опыт работы")
-    min_exp = st.number_input("Мин. опыт (лет)", min_value=0, max_value=50, value=None, placeholder="Не указано", label_visibility="collapsed")
+    min_exp = st.number_input("Мин. опыт (лет)", min_value=0, max_value=50, value=None, placeholder="Не указано")
     
     st.subheader("Город")
-    city_input = st.text_input("Город", value="", placeholder="Оставьте пустым для отключения", label_visibility="collapsed")
+    city_input = st.text_input("Город", value="", placeholder="Оставьте пустым для отключения")
     
     st.subheader("Ключевые слова в должности")
-    pos_kw_input = st.text_input("Через запятую", value="", placeholder="Backend, Python, Data Scientist", label_visibility="collapsed")
+    pos_kw_input = st.text_input("Через запятую", value="", placeholder="Backend, Python, Data Scientist")
     pos_kw = [kw.strip() for kw in pos_kw_input.split(",") if kw.strip()]
     
     st.subheader("Ключевые навыки")
-    skill_kw_input = st.text_input("Через запятую", value="", placeholder="Python, SQL, Docker, FastAPI", label_visibility="collapsed")
+    skill_kw_input = st.text_input("Через запятую", value="", placeholder="Python, SQL, Docker, FastAPI")
     skill_kw = [kw.strip() for kw in skill_kw_input.split(",") if kw.strip()]
     
     st.divider()
