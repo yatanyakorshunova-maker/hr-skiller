@@ -53,8 +53,9 @@ with st.sidebar:
 
 st.subheader("Текст вакансии")
 vacancy_text = st.text_area(
-    "
-    """
+    "Опишите требования к кандидату",
+    value="",
+    height=200
 )
 
 st.divider()
