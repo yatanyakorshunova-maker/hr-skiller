@@ -1,41 +1,16 @@
 import streamlit as st
+import requests
 import pandas as pd
-import io
-import sys
-from typing import Dict, List
-
-import hr_core
-from x_russian_cities import is_valid_russian_city, normalize_city
-from x_it_keywords import is_it_candidate
+import json
 
 # ==================== НАСТРОЙКИ ====================
+API_URL = "http://localhost:8000"  # URL вашего бэкенда
+
 st.set_page_config(
     page_title="AI HR Помощник", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# ==================== ГЛУШИМ ЛИШНИЙ ВЫВОД ====================
-import builtins
-original_print = builtins.print
-
-def silenced_print(*args, **kwargs):
-    msg = str(args[0]) if args else ""
-    bad_words = [
-        "Выполняется семантическое ранжирование",
-        "Запускаем reranking",
-        "Автоматическое извлечение фильтров",
-        "Применяются ручные фильтры",
-        "Применяемые фильтры",
-        "Начинаем валидацию и фильтрацию",
-        "semantic search",
-        "reranking"
-    ]
-    if any(w.lower() in msg.lower() for w in bad_words):
-        return
-    original_print(*args, **kwargs)
-
-builtins.print = silenced_print
 
 # ==================== ВЫБОР РЕЖИМА ====================
 st.title("AI HR Помощник")
@@ -176,9 +151,6 @@ Python разработчик, опыт 5 лет.
     )
     
     uploaded = st.file_uploader("Загрузите файл с вакансиями", type="txt")
-    
-    if 'desired_salary' in locals() and desired_salary:
-        st.info(f"Ваши зарплатные ожидания: {desired_salary} тыс. руб.")
 
 st.divider()
 
@@ -197,164 +169,120 @@ if run_button:
         st.error("Ошибка: текст не введен")
         st.stop()
     
-    filename = "resumes_generated.txt" if is_hr else "vacancies.txt"
-    with open(filename, "wb") as f:
-        f.write(uploaded.getbuffer())
+    # ==================== ФОРМИРУЕМ ЗАПРОС К БЭКЕНДУ ====================
     
-    # ==================== ФОРМИРУЕМ ФИЛЬТРЫ ====================
-    manual_filters = {}
+    # Подготавливаем файлы для отправки
+    if is_hr:
+        resume_file = ("resumes.txt", uploaded.getvalue(), "text/plain")
+    else:
+        resume_file = ("vacancies.txt", uploaded.getvalue(), "text/plain")
     
+    files = {
+        "vacancy_file": ("vacancy.txt", vacancy_text.encode("utf-8"), "text/plain"),
+        "resume_file": resume_file
+    }
+    
+    # Подготавливаем данные формы
+    data = {
+        "top_k": str(top_k),
+        "min_score": str(min_score),
+        "it_threshold": str(it_threshold),
+        "use_auto_filters": str(use_auto).lower(),
+        "use_reranking": str(use_reranking).lower(),
+        "mode": "hr" if is_hr else "candidate"
+    }
+    
+    # Добавляем ручные фильтры, если они включены
     if use_manual:
         if min_age is not None:
-            manual_filters['min_age'] = min_age
+            data["min_age"] = str(min_age)
         if max_age is not None:
-            manual_filters['max_age'] = max_age
+            data["max_age"] = str(max_age)
         if min_exp is not None:
-            manual_filters['min_experience'] = min_exp
+            data["min_experience"] = str(min_exp)
         if city_input.strip():
-            manual_filters['city'] = city_input.strip()
+            data["city"] = city_input.strip()
         if pos_kw:
-            manual_filters['position_keywords'] = pos_kw
+            data["position_keywords"] = ",".join(pos_kw)
         if skill_kw:
-            manual_filters['skills_keywords'] = skill_kw
+            data["skills_keywords"] = ",".join(skill_kw)
         if not is_hr and 'desired_salary' in locals() and desired_salary:
-            manual_filters['desired_salary'] = desired_salary
-    
-    # ==================== НАСТРОЙКИ HR_CORE ====================
-    hr_core.USE_AUTO_FILTERS = use_auto
-    hr_core.USE_MANUAL_FILTERS = use_manual
-    hr_core.USE_MIN_AGE = min_age is not None
-    hr_core.USE_MAX_AGE = max_age is not None
-    hr_core.USE_MIN_EXPERIENCE = min_exp is not None
-    hr_core.USE_CITY = bool(city_input.strip())
-    hr_core.USE_POSITION_KEYWORDS = bool(pos_kw)
-    hr_core.USE_SKILLS_KEYWORDS = bool(skill_kw)
-    hr_core.USE_FILTERS = use_auto or use_manual
-    hr_core.USE_RERANKING = use_reranking
-    hr_core.MIN_SCORE = min_score
-    hr_core.TOP_K = top_k
-    hr_core.IT_THRESHOLD = it_threshold
-    
-    # Загружаем данные
-    with st.spinner("Загрузка данных..."):
-        data = hr_core.load_resumes_from_file(filename)
-    
-    # Запускаем анализ
-    old_stdout = sys.stdout
-    sys.stdout = captured = io.StringIO()
+            data["desired_salary"] = str(desired_salary)
     
     with st.spinner("Анализ (15-40 секунд)..."):
-        results = hr_core.rank_candidates(
-            vacancy_text=vacancy_text,
-            resumes=data,
-            manual_filters=manual_filters if use_manual else None,
-            use_filters=hr_core.USE_FILTERS,
-            use_reranking=use_reranking,
-            min_score=min_score,
-            top_k=top_k,
-            it_threshold=it_threshold
-        )
-    
-    sys.stdout = old_stdout
-    console_log = captured.getvalue()
-    
-    # ==================== ПОКАЗ РЕЗУЛЬТАТОВ ====================
-    if results:
-        results_sorted = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
-        
-        if is_hr:
-            st.success(f"Найдено {len(results_sorted)} подходящих кандидатов")
-        else:
-            st.success(f"Найдено {len(results_sorted)} подходящих вакансий")
-        
-        # Подготовка данных для таблицы
-        for item in results_sorted:
-            if 'skills' in item and isinstance(item['skills'], list):
-                item['skills_display'] = ', '.join(item['skills'][:5])
-                if len(item['skills']) > 5:
-                    item['skills_display'] += f" (+{len(item['skills'])-5})"
-            elif 'skills' in item and isinstance(item['skills'], str):
-                item['skills_display'] = item['skills'][:100]
+        try:
+            # Отправляем запрос к бэкенду
+            response = requests.post(
+                f"{API_URL}/api/v1/match/advanced",
+                files=files,
+                data=data,
+                timeout=120
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                candidates = result.get("top_candidates", [])
+                
+                if candidates:
+                    st.success(f"Найдено {len(candidates)} подходящих кандидатов" if is_hr else f"Найдено {len(candidates)} подходящих вакансий")
+                    
+                    # Подготовка данных для таблицы
+                    df_data = []
+                    for c in candidates:
+                        row = {
+                            "Имя" if is_hr else "Должность": c.get("name" if is_hr else "desired_position", "—"),
+                            "Возраст": c.get("age", "—"),
+                            "Город": c.get("city", "—"),
+                            "Опыт": c.get("experience", "—"),
+                            "Совпадение %": c.get("match_score", 0),
+                            "Точный %": c.get("rerank_score_percent", 0)
+                        }
+                        if not is_hr:
+                            row["Зарплата"] = c.get("salary", "—")
+                            row["Требования"] = c.get("skills", "—")[:50]
+                        else:
+                            row["Навыки"] = c.get("skills", "—")[:50]
+                        df_data.append(row)
+                    
+                    df = pd.DataFrame(df_data)
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+                    
+                    # Детальный просмотр
+                    st.subheader("Детальная информация")
+                    
+                    for idx, c in enumerate(candidates):
+                        title = f"{idx+1}. {c.get('name' if is_hr else 'desired_position', 'Unknown')} - Совпадение: {c.get('match_score', 0):.1f}%"
+                        with st.expander(title):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if is_hr:
+                                    st.write(f"**Имя:** {c.get('name', '—')}")
+                                    st.write(f"**Возраст:** {c.get('age', '—')}")
+                                    st.write(f"**Опыт:** {c.get('experience', '—')} лет")
+                                else:
+                                    st.write(f"**Должность:** {c.get('desired_position', '—')}")
+                                    st.write(f"**Компания:** {c.get('company', '—')}")
+                            with col2:
+                                st.write(f"**Город:** {c.get('city', '—')}")
+                                st.write(f"**Зарплата:** {c.get('salary', '—')}")
+                                st.write(f"**Совпадение:** {c.get('match_score', 0):.1f}%")
+                                if c.get('rerank_score_percent'):
+                                    st.write(f"**Точное совпадение:** {c.get('rerank_score_percent', 0):.1f}%")
+                            
+                            if c.get('skills'):
+                                st.write(f"**{'Навыки' if is_hr else 'Требования']}:** {c.get('skills', '—')[:300]}")
+                else:
+                    st.warning("Ничего не найдено. Попробуйте снизить порог совпадения.")
             else:
-                item['skills_display'] = '—'
-        
-        df = pd.DataFrame(results_sorted)
-        
-        # Выбираем колонки для отображения
-        if is_hr:
-            cols = ['name', 'parsed_age', 'parsed_experience', 'city', 'score', 'rerank_score_percent', 'skills_display']
-            rename = {
-                'name': 'Имя', 'parsed_age': 'Возраст', 'parsed_experience': 'Опыт',
-                'city': 'Город', 'score': 'Совпадение %', 'rerank_score_percent': 'Точный %',
-                'skills_display': 'Навыки'
-            }
-        else:
-            cols = ['desired_position', 'company', 'salary', 'city', 'score', 'rerank_score_percent', 'skills_display']
-            rename = {
-                'desired_position': 'Должность', 'company': 'Компания', 'salary': 'Зарплата',
-                'city': 'Город', 'score': 'Совпадение %', 'rerank_score_percent': 'Точный %',
-                'skills_display': 'Требования'
-            }
-        
-        cols = [c for c in cols if c in df.columns]
-        df_display = df[cols].copy()
-        df_display = df_display.rename(columns=rename)
-        
-        for col in ['Совпадение %', 'Точный %']:
-            if col in df_display.columns:
-                df_display[col] = df_display[col].round(1)
-        
-        st.subheader("Результаты поиска")
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
-        
-        # Детальный просмотр
-        st.subheader("Детальная информация")
-        
-        for idx, item in enumerate(results_sorted):
-            title = f"{idx+1}. {item.get('name' if is_hr else 'desired_position', 'Unknown')} - Совпадение: {item.get('score', 0):.1f}%"
-            with st.expander(title):
-                col1, col2 = st.columns(2)
-                with col1:
-                    if is_hr:
-                        st.write(f"**Имя:** {item.get('name', '—')}")
-                        st.write(f"**Возраст:** {item.get('parsed_age', '—')}")
-                        st.write(f"**Опыт:** {item.get('parsed_experience', '—')} лет")
-                    else:
-                        st.write(f"**Должность:** {item.get('desired_position', '—')}")
-                        st.write(f"**Компания:** {item.get('company', '—')}")
-                        if item.get('requirements'):
-                            st.write(f"**Требования:** {item.get('requirements', '—')[:200]}")
-                with col2:
-                    st.write(f"**Город:** {item.get('city', '—')}")
-                    st.write(f"**Зарплата:** {item.get('salary', '—')}")
-                    st.write(f"**Совпадение:** {item.get('score', 0):.1f}%")
-                    if item.get('rerank_score_percent'):
-                        st.write(f"**Точное совпадение:** {item.get('rerank_score_percent', 0):.1f}%")
+                st.error(f"Ошибка API: {response.status_code}")
+                st.code(response.text)
                 
-                if item.get('skills'):
-                    skills_str = ', '.join(item['skills']) if isinstance(item['skills'], list) else item['skills']
-                    label = "Навыки" if is_hr else "Требования"
-                    st.write(f"**{label}:** {skills_str[:300]}")
-                
-                if item.get('education'):
-                    st.write(f"**Образование:** {item['education'][:200]}")
-    else:
-        st.warning("Ничего не найдено. Попробуйте снизить порог совпадения или ослабить фильтры.")
-    
-    if console_log:
-        clean_lines = []
-        for line in console_log.split('\n'):
-            skip = False
-            for phrase in ["семантическое", "reranking", "автоматическое", "ручные", "валидацию"]:
-                if phrase.lower() in line.lower():
-                    skip = True
-                    break
-            if not skip and line.strip():
-                clean_lines.append(line)
-        if clean_lines:
-            with st.expander("Журнал работы"):
-                st.text('\n'.join(clean_lines))
+        except requests.exceptions.ConnectionError:
+            st.error("Не удалось подключиться к бэкенду. Убедитесь, что он запущен на " + API_URL)
+        except requests.exceptions.Timeout:
+            st.error("Превышено время ожидания. Попробуйте уменьшить количество резюме.")
+        except Exception as e:
+            st.error(f"Ошибка: {e}")
 
 st.divider()
-st.caption("AI HR Помощник | Обработка происходит локально, данные не отправляются")
-builtins.print = original_print
+st.caption("AI HR Помощник | Работает через бэкенд FastAPI")
