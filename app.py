@@ -262,22 +262,12 @@ if run_button:
                                 else:
                                     st.write(f"**Должность:** {c.get('desired_position', '—')}")
                                     st.write(f"**Компания:** {c.get('company', '—')}")
-                            with col2:
-                                st.write(f"**Город:** {c.get('city', '—')}")
-                                st.write(f"**Зарплата:** {c.get('salary', '—')}")
-                                st.write(f"**Совпадение:** {c.get('match_score', 0):.1f}%")
-                                if c.get('rerank_score_percent'):
-                                    st.write(f"**Точное совпадение:** {c.get('rerank_score_percent', 0):.1f}%")
-                            
-                            if c.get('skills'):
-                                st.write(f"**{'Навыки' if is_hr else 'Требования']}:** {c.get('skills', '—')[:300]}")
-                else:
-                    st.warning("Ничего не найдено. Попробуйте снизить порог совпадения.")
-            else:
-                st.error(f"Ошибка API: {response.status_code}")
-                st.code(response.text)
-                
-        except requests.exceptions.ConnectionError:
+   if c.get('skills'):
+    skills_str = c.get('skills', '—')
+    if len(skills_str) > 300:
+        skills_str = skills_str[:300]
+    label = "Навыки" if is_hr else "Требования"
+    st.write(f"**{label}:** {skills_str}")
             st.error("Не удалось подключиться к бэкенду. Убедитесь, что он запущен на " + API_URL)
         except requests.exceptions.Timeout:
             st.error("Превышено время ожидания. Попробуйте уменьшить количество резюме.")
