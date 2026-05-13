@@ -106,7 +106,7 @@ if run_button:
                 f"{API_URL}/api/v1/match/advanced",
                 files=files,
                 data=data,
-                timeout=120
+                timeout=300
             )
             
             if response.status_code == 200:
