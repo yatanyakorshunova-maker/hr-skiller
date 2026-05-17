@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 # ==================== НАСТРОЙКИ ====================
-API_URL = "http://localhost:8000"
+API_URL = st.secrets.get("BACKEND_URL", "http://localhost:8000")
 
 st.set_page_config(
     page_title="AI HR Скринер", 
@@ -17,15 +17,15 @@ st.header("Подбор кандидатов под вакансию")
 
 st.divider()
 
-# ==================== ИНИЦИАЛИЗАЦИЯ SESSION_STATE ====================
-if "candidates_all" not in st.session_state:
-    st.session_state.candidates_all = []  # Все кандидаты из последнего поиска
-if "rejected_ids" not in st.session_state:
-    st.session_state.rejected_ids = set()  # ID отсеянных кандидатов
-if "last_search_time" not in st.session_state:
-    st.session_state.last_search_time = None
+# ==================== ИНИЦИАЛИЗАЦИЯ СЕССИИ ====================
+if "candidates" not in st.session_state:
+    st.session_state.candidates = []
+if "rejected_indices" not in st.session_state:
+    st.session_state.rejected_indices = set()
+if "last_search" not in st.session_state:
+    st.session_state.last_search = None
 
-# ==================== НАСТРОЙКИ ФИЛЬТРАЦИИ ====================
+# ==================== БОКОВАЯ ПАНЕЛЬ ====================
 with st.sidebar:
     st.header("Настройки фильтрации")
     
@@ -55,18 +55,20 @@ with st.sidebar:
     
     st.divider()
     
-    # Кнопка сброса отсеянных
-    if st.button("🔄 Сбросить всех отсеянных", use_container_width=True):
-        st.session_state.rejected_ids.clear()
+    if st.button("Сбросить всех отсеянных", use_container_width=True):
+        st.session_state.rejected_indices.clear()
         st.rerun()
+    
+    st.caption(f"Бэкенд: {API_URL}")
 
 # ==================== ОСНОВНАЯ ОБЛАСТЬ ====================
 
-st.subheader("Текст вакансии")
+st.subheader("Текст вакансии (необязательно)")
 vacancy_text = st.text_area(
-    "Опишите требования к кандидату",
+    "Опишите требования к кандидату или оставьте пустым",
     value="",
-    height=200
+    height=150,
+    help="Если оставить пустым, бэкенд вернет всех кандидатов без ранжирования"
 )
 
 st.divider()
@@ -79,17 +81,13 @@ col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
 with col_btn2:
     run_button = st.button("Запустить подбор", type="primary", use_container_width=True)
 
+# ==================== ОБРАБОТКА ЗАПУСКА ====================
 if run_button:
     if not uploaded:
         st.error("Ошибка: файл не загружен")
         st.stop()
     
-    if not vacancy_text.strip():
-        st.error("Ошибка: текст не введен")
-        st.stop()
-    
     files = {
-        "vacancy_file": ("vacancy.txt", vacancy_text.encode("utf-8"), "text/plain"),
         "resume_file": ("resumes.txt", uploaded.getvalue(), "text/plain")
     }
     
@@ -97,6 +95,9 @@ if run_button:
         "top_k": str(top_k),
         "min_score": str(min_score)
     }
+    
+    if vacancy_text.strip():
+        files["vacancy_file"] = ("vacancy.txt", vacancy_text.encode("utf-8"), "text/plain")
     
     if min_age is not None:
         data["min_age"] = str(min_age)
@@ -124,54 +125,51 @@ if run_button:
                 result = response.json()
                 candidates = result.get("top_candidates", [])
                 
-                # Сохраняем в session_state с уникальными ID
-                st.session_state.candidates_all = []
-                for idx, c in enumerate(candidates):
-                    # Генерируем уникальный ID для кандидата (на основе имени + города + возраста)
-                    unique_id = f"{c.get('name', '')}_{c.get('city', '')}_{c.get('age', '')}_{idx}"
-                    st.session_state.candidates_all.append({
-                        "id": unique_id,
-                        "data": c
-                    })
-                
-                st.session_state.last_search_time = datetime.now()
+                st.session_state.candidates = candidates
+                st.session_state.rejected_indices.clear()
+                st.session_state.last_search = datetime.now()
                 st.rerun()
             else:
                 st.error(f"Ошибка API: {response.status_code}")
                 st.code(response.text)
                 
+        except requests.exceptions.ConnectionError:
+            st.error(f"Не удалось подключиться к бэкенду: {API_URL}")
+        except requests.exceptions.Timeout:
+            st.error("Превышено время ожидания (300 секунд)")
         except Exception as e:
             st.error(f"Ошибка: {e}")
 
-# ==================== ОТОБРАЖЕНИЕ КАНДИДАТОВ ====================
-
-if st.session_state.candidates_all:
-    # Разделяем на активных и отсеянных
-    active_candidates = [c for c in st.session_state.candidates_all 
-                         if c["id"] not in st.session_state.rejected_ids]
-    rejected_candidates = [c for c in st.session_state.candidates_all 
-                           if c["id"] in st.session_state.rejected_ids]
+# ==================== ОТОБРАЖЕНИЕ РЕЗУЛЬТАТОВ ====================
+if st.session_state.candidates:
+    # Разделяем кандидатов
+    active_candidates = []
+    rejected_candidates = []
     
-    # Создаем вкладки
-    tab_all, tab_rejected = st.tabs([
-        f"✅ Активные кандидаты ({len(active_candidates)})",
-        f"❌ Отсеянные ({len(rejected_candidates)})"
+    for idx, c in enumerate(st.session_state.candidates):
+        if idx in st.session_state.rejected_indices:
+            rejected_candidates.append(c)
+        else:
+            active_candidates.append(c)
+    
+    tab1, tab2 = st.tabs([
+        f"Активные кандидаты ({len(active_candidates)})",
+        f"Отсеянные ({len(rejected_candidates)})"
     ])
     
-    # ========== ВКЛАДКА "АКТИВНЫЕ" ==========
-    with tab_all:
+    # ========== ВКЛАДКА АКТИВНЫЕ ==========
+    with tab1:
         if active_candidates:
-            # Таблица с активными
+            # Таблица активных
             df_data = []
             for c in active_candidates:
-                cand = c["data"]
                 row = {
-                    "Имя": cand.get("name", "—"),
-                    "Возраст": cand.get("age", "—"),
-                    "Город": cand.get("city", "—"),
-                    "Опыт": cand.get("experience", "—"),
-                    "Совпадение %": cand.get("match_score", 0),
-                    "Навыки": cand.get("skills", "—")[:50]
+                    "Имя": c.get("name", "—"),
+                    "Возраст": c.get("age", "—"),
+                    "Город": c.get("city", "—"),
+                    "Опыт": c.get("experience", "—"),
+                    "Совпадение %": c.get("match_score", 0),
+                    "Навыки": c.get("skills", "—")[:50]
                 }
                 df_data.append(row)
             
@@ -180,76 +178,86 @@ if st.session_state.candidates_all:
             
             st.subheader("Детальная информация")
             
-            for c in active_candidates:
-                cand = c["data"]
-                candidate_id = c["id"]
-                name = cand.get("name", "Unknown")
-                title = f"{name} - Совпадение: {cand.get('match_score', 0):.1f}%"
+            for idx, c in enumerate(active_candidates):
+                # Находим глобальный индекс
+                global_idx = st.session_state.candidates.index(c)
+                name = c.get("name", "Unknown")
+                title = f"{name} - Совпадение: {c.get('match_score', 0):.1f}%"
                 
                 with st.expander(title):
                     col1, col2, col3 = st.columns([2, 2, 1])
                     with col1:
-                        st.write(f"**Имя:** {cand.get('name', '—')}")
-                        st.write(f"**Возраст:** {cand.get('age', '—')}")
-                        st.write(f"**Опыт:** {cand.get('experience', '—')} лет")
+                        st.write(f"**Имя:** {c.get('name', '—')}")
+                        st.write(f"**Возраст:** {c.get('age', '—')}")
+                        st.write(f"**Опыт:** {c.get('experience', '—')} лет")
                     with col2:
-                        st.write(f"**Город:** {cand.get('city', '—')}")
-                        st.write(f"**Зарплата:** {cand.get('salary', '—')}")
-                        st.write(f"**Совпадение:** {cand.get('match_score', 0):.1f}%")
+                        st.write(f"**Город:** {c.get('city', '—')}")
+                        st.write(f"**Зарплата:** {c.get('salary', '—')}")
+                        st.write(f"**Совпадение:** {c.get('match_score', 0):.1f}%")
                     with col3:
-                        st.write("")
-                        st.write("")
-                        if st.button("❌ Отсеять", key=f"reject_{candidate_id}"):
-                            st.session_state.rejected_ids.add(candidate_id)
+                        if st.button("Отсеять", key=f"reject_{global_idx}"):
+                            st.session_state.rejected_indices.add(global_idx)
                             st.rerun()
                     
-                    if cand.get('skills'):
-                        skills_str = cand.get('skills', '—')
+                    if c.get('skills'):
+                        skills_str = c.get('skills', '—')
                         if len(skills_str) > 300:
                             skills_str = skills_str[:300] + "..."
                         st.write(f"**Навыки:** {skills_str}")
                     
-                    if cand.get('desired_position'):
-                        st.write(f"**Желаемая должность:** {cand.get('desired_position', '—')}")
+                    if c.get('desired_position'):
+                        st.write(f"**Желаемая должность:** {c.get('desired_position', '—')}")
         else:
             st.info("Нет активных кандидатов")
     
-    # ========== ВКЛАДКА "ОТСЕЯННЫЕ" ==========
-    with tab_rejected:
+    # ========== ВКЛАДКА ОТСЕЯННЫЕ ==========
+    with tab2:
         if rejected_candidates:
-            # Таблица с отсеянными
             df_rejected = []
             for c in rejected_candidates:
-                cand = c["data"]
                 row = {
-                    "Имя": cand.get("name", "—"),
-                    "Возраст": cand.get("age", "—"),
-                    "Город": cand.get("city", "—"),
-                    "Причина": "Отсеян пользователем",
-                    "Совпадение %": cand.get("match_score", 0)
+                    "Имя": c.get("name", "—"),
+                    "Возраст": c.get("age", "—"),
+                    "Город": c.get("city", "—"),
+                    "Опыт": c.get("experience", "—"),
+                    "Совпадение %": c.get("match_score", 0),
+                    "Навыки": c.get("skills", "—")[:50]
                 }
                 df_rejected.append(row)
             
             df_r = pd.DataFrame(df_rejected)
             st.dataframe(df_r, use_container_width=True, hide_index=True)
             
-            st.subheader("Восстановить кандидатов")
-            for c in rejected_candidates:
-                cand = c["data"]
-                candidate_id = c["id"]
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    st.write(f"**{cand.get('name', 'Unknown')}** — {cand.get('match_score', 0):.1f}%")
-                with col2:
-                    if st.button("↩️ Вернуть", key=f"restore_{candidate_id}"):
-                        st.session_state.rejected_ids.discard(candidate_id)
-                        st.rerun()
+            st.subheader("Детальная информация отсеянных")
+            
+            for idx, c in enumerate(rejected_candidates):
+                name = c.get("name", "Unknown")
+                title = f"{name} - Совпадение: {c.get('match_score', 0):.1f}%"
+                
+                with st.expander(title):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write(f"**Имя:** {c.get('name', '—')}")
+                        st.write(f"**Возраст:** {c.get('age', '—')}")
+                        st.write(f"**Опыт:** {c.get('experience', '—')} лет")
+                    with col2:
+                        st.write(f"**Город:** {c.get('city', '—')}")
+                        st.write(f"**Зарплата:** {c.get('salary', '—')}")
+                        st.write(f"**Совпадение:** {c.get('match_score', 0):.1f}%")
+                    
+                    if c.get('skills'):
+                        skills_str = c.get('skills', '—')
+                        if len(skills_str) > 300:
+                            skills_str = skills_str[:300] + "..."
+                        st.write(f"**Навыки:** {skills_str}")
         else:
             st.info("Нет отсеянных кандидатов")
     
-    # Информация о времени последнего поиска
-    if st.session_state.last_search_time:
-        st.caption(f"📅 Последний поиск: {st.session_state.last_search_time.strftime('%H:%M:%S')}")
+    if st.session_state.last_search:
+        st.caption(f"Последний поиск: {st.session_state.last_search.strftime('%d.%m.%Y %H:%M:%S')}")
+
+elif run_button and uploaded:
+    st.info("Ничего не найдено. Попробуйте снизить порог совпадения.")
 
 st.divider()
-st.caption("AI HR Скринер — статусы хранятся только в текущей сессии")
+st.caption("AI HR Скринер")
